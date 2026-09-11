@@ -91,6 +91,8 @@
 !/agents/skills/memload/SKILL.md
 !/agents/skills/orchestration-v2/SKILL.md
 !/agents/skills/pr_update/SKILL.md
+!/agents/skills/i-have-adhd/SKILL.md
+!/agents/skills/i-have-adhd/agents/openai.yaml
 !/agents/skills/brainstorming/SKILL.md
 !/agents/skills/brainstorming/scripts/frame-template.html
 !/agents/skills/brainstorming/scripts/helper.js

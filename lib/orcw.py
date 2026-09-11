@@ -1469,7 +1469,7 @@ def cmd_handoff(ns: argparse.Namespace) -> int:
     subs = {"branch": "(set by Orca at create)", "path": "(this worktree)", "repo": ns.repo or "", "run": "",
             "base_commit": ns.base or "(repo default base)", "name": ns.name}
     text = render_spec(spec, "handoff", subs, ns.context, ns.commit_policy, None)
-    wt = create_worktree(ns, "", agent=ns.agent, prompt=text)
+    wt = create_worktree(ns, agent=ns.agent, prompt=text)
     view = {k: wt.get(k) for k in ("worktree", "path", "branch", "base_commit", "handle")}
     lines = [
         f"handed {wt.get('path')}  branch {wt.get('branch')}  base {str(wt.get('base_commit'))[:12]}",
