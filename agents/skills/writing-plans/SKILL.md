@@ -1,26 +1,33 @@
 ---
 name: writing-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code
+description: Use when the user asks for an implementation plan or when a large, complex task would benefit from proposing a structured workflow. Present plans in chat unless the user asks for a file or accepts a proposal that includes one.
 ---
 
 # Writing Plans
 
 ## Overview
 
-Write comprehensive implementation plans assuming the engineer has zero context for our codebase and questionable taste. Document everything they need to know: which files to touch for each task, code, testing, docs they might need to check, how to test it. Give them the whole plan as bite-sized tasks. DRY. YAGNI. TDD. Frequent commits. Code in the plan follows the `anti-slop` skill: smallest correct change that fits the codebase.
+Write actionable implementation plans for an engineer who has little context about the codebase. Include the files, behavior, dependencies, and verification needed to implement each task. Follow the `anti-slop` skill: use the smallest correct change that fits the codebase.
 
-Assume they are a skilled developer, but know almost nothing about our toolset or problem domain. Assume they don't know good test design very well.
+Assume the reader is a skilled developer who is new to the project.
 
-**Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
+## Output and Workflow
+
+- Present the plan in chat by default.
+- Create or modify a plan file only when the user explicitly asks for one or accepts a proposal that clearly includes one. Do not treat task complexity alone as permission to write a document.
+- For large, complex work, you may propose a fuller workflow: design discussion, optional reviewed spec, detailed plan, and staged execution. Explain the benefit and wait for acceptance before creating either document.
+- For clear, bounded implementation requests, planning is optional. The model may state a concise approach in chat and implement directly.
+- Match detail to the audience and execution method. A chat plan can be concise; a plan handed to another agent must be self-contained.
+
+When the user requests a file, use their path or default to `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`.
 
 **Context:** If working in an isolated worktree, it should have been created at execution time (Claude Code's worktree isolation, or `git worktree add`).
 
-**Save plans to:** `docs/superpowers/plans/YYYY-MM-DD-<feature-name>.md`
-- (User preferences for plan location override this default)
-
 ## Scope Check
 
-If the spec covers multiple independent subsystems, it should have been broken into sub-project specs during brainstorming. If it wasn't, suggest breaking this into separate plans — one per subsystem. Each plan should produce working, testable software on its own.
+If the work covers multiple independent subsystems, propose splitting it into independently useful, testable stages. A separate spec or plan file for each stage is optional and still requires user approval.
+
+The remaining format is for detailed saved plans and plans handed to another agent. For a chat plan, include only the detail needed to make the sequence, decisions, and verification clear.
 
 ## File Structure
 
@@ -51,9 +58,9 @@ independently testable deliverable.
 - "Run the tests and make sure they pass" - step
 - "Commit" - step
 
-## Plan Document Header
+## Saved Plan Header
 
-**Every plan MUST start with this header:**
+Use this header for a saved plan. Chat plans may use lighter formatting.
 
 ```markdown
 # [Feature Name] Implementation Plan
@@ -76,7 +83,9 @@ include this section.]
 ---
 ```
 
-## Task Structure
+## Detailed Task Structure
+
+Use this structure for saved plans and plans intended for handoff. Adapt or shorten it for chat when the same detail is unnecessary.
 
 ````markdown
 ### Task N: [Component Name]
@@ -137,32 +146,19 @@ Every step must contain the actual content an engineer needs. These are **plan f
 
 ## Self-Review
 
-After writing the complete plan, look at the spec with fresh eyes and check the plan against it. This is a checklist you run yourself — not a subagent dispatch.
+After writing the complete plan, check it against the user's requirements and any available spec. This is a checklist you run yourself — not a subagent dispatch.
 
-**1. Spec coverage:** Skim each section/requirement in the spec. Can you point to a task that implements it? List any gaps.
+**1. Requirement coverage:** Can you point to a task that implements each requirement? List any gaps.
 
 **2. Placeholder scan:** Search your plan for red flags — any of the patterns from the "No Placeholders" section above. Fix them.
 
 **3. Type consistency:** Do the types, method signatures, and property names you used in later tasks match what you defined in earlier tasks? A function called `clearLayers()` in Task 3 but `clearFullLayers()` in Task 7 is a bug.
 
-If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a spec requirement with no task, add the task.
+If you find issues, fix them inline. No need to re-review — just fix and move on. If you find a requirement with no task, add the task.
 
 ## Execution Handoff
 
-After saving the plan, offer execution choice:
-
-**"Plan complete and saved to `docs/superpowers/plans/<filename>.md`. Two execution options:**
-
-**1. Subagent-Driven (recommended)** - I dispatch a fresh subagent per task, review between tasks, fast iteration
-
-**2. Inline Execution** - Execute tasks in this session using executing-plans, batch execution with checkpoints
-
-**Which approach?"**
-
-**If Subagent-Driven chosen:**
-- **REQUIRED SUB-SKILL:** Use subagent-driven-development
-- Fresh subagent per task + two-stage review
-
-**If Inline Execution chosen:**
-- **REQUIRED SUB-SKILL:** Use executing-plans
-- Batch execution with checkpoints for review
+- If the user asked only for a plan, present it and ask whether they want implementation.
+- If they already asked for implementation, proceed after any required design decisions are settled.
+- Use subagent-driven-development when the user chose that workflow and the saved plan has independent tasks.
+- Use executing-plans when the user asks to execute a saved plan in a separate session.

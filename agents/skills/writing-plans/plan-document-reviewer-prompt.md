@@ -4,7 +4,7 @@ Use this template when dispatching a plan document reviewer subagent.
 
 **Purpose:** Verify the plan is complete, matches the spec, and has proper task decomposition.
 
-**Dispatch after:** The complete plan is written.
+**Dispatch after:** The user requests a plan document and it has been written.
 
 ```
 Subagent (general-purpose):
