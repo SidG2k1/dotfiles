@@ -40,6 +40,8 @@ Tests protect behavior; test count and coverage percentage are not goals.
 
 Before adding a test, name the concrete regression it would catch. If none can be named, do not add it. Avoid tests that duplicate existing scenarios, cover trivial pass-through/type guarantees, assert private implementation details, overmock internals, or require new scaffolding for one small case.
 
+Absence-confirmation tests are almost always slop. Do not add tests that merely assert removed files, symbols, names, commands, or implementation text stay absent; remove such assertions when reviewing existing tests. Keep negative assertions only when they protect a concrete behavior or safety requirement, such as rejecting unauthorized access, preventing secret exposure, or preserving files outside a deployment's ownership.
+
 For changed non-trivial behavior, add the smallest check that would fail on a meaningful regression. Reuse existing test style/helpers; mock at external boundaries. Do not rewrite unrelated tests.
 
 Run the narrowest relevant existing formatter, linter, type checker, build, and tests. Broaden verification only when the blast radius warrants it.
