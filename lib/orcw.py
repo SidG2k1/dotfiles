@@ -36,6 +36,7 @@ import re
 import shlex
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
@@ -48,6 +49,7 @@ WAIT_TYPES = "worker_done,escalation,question"
 BODY_LIMIT = 1500
 COLS = 120
 SETTLED = {"completed", "failed", "stopped", "abandoned"}
+TASK_DONE = SETTLED | {"succeeded"}
 LAUNCH_PREF_CAP = "orchestration.worker-launch-preferences.v1"
 
 
@@ -80,6 +82,9 @@ class OrcaError(Exception):
         print(json.dumps(err, indent=2, sort_keys=True), file=sys.stderr)
         for step in err.get("nextSteps") or []:
             print(f"  next: {step}", file=sys.stderr)
+        if err.get("code") == "repo_not_found" and not any(
+                "repo add" in str(step) for step in err.get("nextSteps") or []):
+            print("  next: Register the checkout: orca repo add --path <checkout>", file=sys.stderr)
         nca = err.get("nextCommandArgs")
         if nca:
             print("  run:  " + " ".join(shlex.quote(c) for c in orca_cmd() + list(nca)), file=sys.stderr)
@@ -137,12 +142,64 @@ def parse_stream(text: str) -> List[Any]:
     return docs
 
 
-def orca(*args: Any, timeout: Optional[float] = None, allow_fail: bool = False) -> List[Any]:
+def orca(*args: Any, timeout: Optional[float] = None, allow_fail: bool = False,
+         progress: bool = False) -> List[Any]:
     cmd = orca_cmd() + [str(a) for a in args]
     if "--json" not in cmd:
         cmd.append("--json")
     try:
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        if not progress:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        else:
+            child = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            stdout: List[str] = []
+            stderr: List[str] = []
+
+            def drain_stdout() -> None:
+                assert child.stdout is not None
+                stdout.extend(child.stdout)
+
+            def drain_stderr() -> None:
+                assert child.stderr is not None
+                for line in child.stderr:
+                    try:
+                        item = json.loads(line)
+                    except ValueError:
+                        item = None
+                    if isinstance(item, dict) and (item.get("_keepalive") or item.get("_heartbeat")):
+                        elapsed = item.get("elapsedMs")
+                        suffix = f"{int(elapsed) // 1000}s elapsed" if isinstance(elapsed, (int, float)) else "still waiting"
+                        print(f"wait   {suffix}", file=sys.stderr, flush=True)
+                    else:
+                        stderr.append(line)
+
+            readers = [threading.Thread(target=drain_stdout), threading.Thread(target=drain_stderr)]
+            for reader in readers:
+                reader.start()
+            try:
+                child.wait(timeout=timeout)
+            except subprocess.TimeoutExpired as exc:
+                child.terminate()
+                try:
+                    child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+                exc.stdout = "".join(stdout)
+                exc.stderr = "".join(stderr)
+                raise
+            except KeyboardInterrupt:
+                child.terminate()
+                try:
+                    child.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+                raise
+            finally:
+                for reader in readers:
+                    reader.join()
+            proc = SimpleNamespace(returncode=child.returncode, stdout="".join(stdout), stderr="".join(stderr))
     except FileNotFoundError as exc:
         raise OrcaError({"code": "orca_not_found", "message": str(exc)}, cmd)
     except subprocess.TimeoutExpired as exc:
@@ -559,15 +616,12 @@ def trailer(kind: str, subs: Dict[str, str], ctx: List[str], policy: str, report
         if cmd != "orcw":
             lines.append(f"`orcw` is not on PATH here. Every `orcw` below means `{cmd}`.")
         lines += [
-            "FIRST: paste your whole preamble (from \"You are working inside Orca\" up to and including the",
-            "\"=== TASK ===\" line) into this command; it stores the two values Orca needs and prints what it resolved:",
+            "FIRST: copy the --from and --dispatch-capability values from your injected preamble into:",
             "",
-            f"    {cmd} w init --preamble-file - <<'PREAMBLE'",
-            "    <paste the preamble here>",
-            "    PREAMBLE",
+            f"    {cmd} w init --from <handle> --capability <token>",
             "",
-            "After that, the preamble's raw `orca orchestration ...` commands are superseded by the `orcw w` commands",
-            "below; do not run them. Only the two values (--from and --dispatch-capability) are used, and init took them.",
+            "Task and dispatch are inferred from this worktree. After init, use the `orcw w` commands below instead of",
+            "the raw `orca orchestration ...` commands in the preamble.",
         ]
     lines.append(f"Worktree: {subs.get('path', '?')}  branch: {subs.get('branch', '?')}  base: {subs.get('base_commit', '?')}")
     if ctx:
@@ -576,13 +630,13 @@ def trailer(kind: str, subs: Dict[str, str], ctx: List[str], policy: str, report
     lines.append("Do not add AI-generation branding to commits, PR text, or files.")
     if kind == "task":
         lines += [
-            "Every 5 minutes while working: `orcw w heartbeat <investigating|implementing|reviewing|waiting>`.",
+            "Init sends liveness heartbeats automatically. Use `orcw w heartbeat <phase>` only for a phase change.",
             "Decisions the spec does not settle: `orcw w ask \"<question>\" --options a,b`. Never guess.",
             "Before any irreversible step (push, PR, tag, apply, delete): `orcw w mail`, and act on what it says.",
             "Scratch files (reports, notes) go under $TMPDIR or the path the spec names, never into the worktree.",
-            "When finished: `orcw w done --ok|--failed \"<subject>\" --body <file> [--files <csv>]`, once, then idle.",
+            "When finished: `orcw w done --ok|--failed --summary \"<short status>\" --report <file> [--files <csv>]`, once, then idle.",
             "  (--files lists paths you changed; omit it when you changed nothing.)",
-            "The done body must contain: " + (report or "what changed, what you found, what remains, and any URL"),
+            "The report must contain: " + (report or "what changed, what you found, what remains, and any URL"),
         ]
     else:
         lines.append("This is a full handoff: you own the work. No coordinator is waiting; do not send lifecycle messages.")
@@ -625,7 +679,7 @@ USED: Dict[str, Dict[str, List[str]]] = {
         "worker-release": ["--dispatch"],
         "dispatch": ["--task", "--to", "--inject", "--run"],
         "dispatch-show": ["--task"],
-        "check": ["--wait", "--types", "--timeout-ms", "--ack", "--peek", "--run"],
+        "check": ["--wait", "--types", "--timeout-ms", "--ack", "--unread", "--peek", "--run"],
         "send": ["--to", "--subject", "--body", "--type", "--task-id", "--dispatch-id", "--outcome", "--files-modified"],
         "reply": ["--id", "--body"],
         "ask": ["--question", "--options", "--timeout-ms", "--resume"],
@@ -896,7 +950,7 @@ def start_task(ns: argparse.Namespace, run: str, data: Dict[str, Any], o: Any, s
     ws = ["orchestration", "worker-start", "--task", task_id, "--run", run]
     if mode == "new-agent" and handle:
         orca("terminal", "wait", "--terminal", handle, "--for", "tui-idle", "--timeout-ms", "60000", allow_fail=True)
-        ws += ["--terminal", handle]
+        ws += ["--worktree", wt.get("selector") or f"id:{wt['worktree']}", "--terminal", handle]
     else:
         ws += ["--worktree", wt.get("selector") or f"id:{wt['worktree']}", "--agent", o.agent]
         if o.model:
@@ -1044,8 +1098,13 @@ def settle_delivery(ns: argparse.Namespace, run: str, data: Dict[str, Any], deli
                 result(orca("orchestration", "worker-show", "--dispatch", dispatch)), "worker")["handle"]
             if not handle:
                 raise Refused(f"--reuse {task_id}: no agent terminal handle known for {dispatch}")
+            worktree = rec.get("worktree")
+            path = rec.get("path")
+            if not worktree and not path:
+                raise Refused(f"--reuse {task_id}: no worktree known for {dispatch}")
+            selector = f"id:{worktree}" if worktree else f"path:{path}"
             receipt = project(result(orca("orchestration", "worker-start", "--task", reuse[task_id],
-                                          "--run", run, "--terminal", handle)), "worker_start")
+                                          "--run", run, "--worktree", selector, "--terminal", handle)), "worker_start")
             data["tasks"].setdefault(reuse[task_id], {}).update(
                 {"dispatch": receipt["dispatch"], "handle": receipt["handle"] or handle, "path": rec.get("path"),
                  "branch": rec.get("branch"), "worktree": rec.get("worktree"), "supervised": True,
@@ -1090,9 +1149,29 @@ def all_settled(run: str, data: Dict[str, Any]) -> bool:
 
 
 def cmd_wait(ns: argparse.Namespace) -> int:
-    if ns.auto:
-        return auto_wait(ns)
-    return wait_once(ns)
+    import fcntl
+
+    run = require_run(ns)
+    ns.run = run
+    path = home() / "runs" / run / "wait.lock"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock = path.open("a+")
+    try:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            lock.seek(0)
+            owner = lock.read().strip()
+            raise Refused("another orcw wait is already running" + (f" (pid {owner})" if owner else ""))
+        lock.seek(0)
+        lock.truncate()
+        lock.write(str(os.getpid()))
+        lock.flush()
+        if ns.auto:
+            return auto_wait(ns)
+        return wait_once(ns)
+    finally:
+        lock.close()
 
 
 def auto_wait(ns: argparse.Namespace) -> int:
@@ -1112,7 +1191,7 @@ def auto_wait(ns: argparse.Namespace) -> int:
         # Nothing live: drain any unacked delivery without blocking, then stop.
         args = ["orchestration", "check", "--run", run] if settled else \
             ["orchestration", "check", "--run", run, "--wait", "--types", ns.types, "--timeout-ms", str(timeout_ms)]
-        docs = orca(*args, timeout=timeout_ms / 1000 + 30)
+        docs = orca(*args, timeout=timeout_ms / 1000 + 30, progress=not settled)
         res = result(docs)
         delivery = project(res, "delivery")["delivery"]
         messages = res.get("messages") or []
@@ -1160,7 +1239,7 @@ def wait_once(ns: argparse.Namespace) -> int:
     args = ["orchestration", "check", "--run", run, "--wait", "--types", ns.types, "--timeout-ms", str(timeout_ms)]
     if ns.ack:
         args += ["--ack", ns.ack]
-    docs = orca(*args, timeout=timeout_ms / 1000 + 30)
+    docs = orca(*args, timeout=timeout_ms / 1000 + 30, progress=True)
     res = result(docs)
     view = project(res, "delivery")
     messages = res.get("messages") or []
@@ -1325,15 +1404,36 @@ def rebuild(run: str, data: Dict[str, Any]) -> Dict[str, Any]:
 def status_rows(run: str, data: Dict[str, Any], with_git: bool = True) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     try:
-        for w in result(orca("orchestration", "worker-list", "--run", run)).get("workers") or []:
-            rec = data["tasks"].get(w.get("taskId"))
-            if rec is not None:
-                rec["terminal_state"] = w.get("terminalState")
-                if w.get("dispatchStatus") in SETTLED and rec.get("status") not in ("succeeded", "failed"):
-                    rec["status"] = w.get("dispatchStatus")
-        save_run(data)
+        workers = result(orca("orchestration", "worker-list", "--run", run)).get("workers") or []
     except OrcaError:
-        pass
+        workers = []
+    retained = [w for w in workers if get(w, "resource.retainedReason") == "user_takeover"]
+    active_terms: set = set()
+    active_worktrees: set = set()
+    inventories_ok = False
+    if retained:
+        try:
+            active_terms = {t.get("handle") for t in result(orca("terminal", "list")).get("terminals") or []}
+            active_worktrees = {w.get("id") for w in result(orca("worktree", "list")).get("worktrees") or []}
+            inventories_ok = True
+        except OrcaError:
+            pass
+    for worker in workers:
+        rec = data["tasks"].get(worker.get("taskId"))
+        if rec is None:
+            continue
+        rec["terminal_state"] = worker.get("terminalState")
+        rec["retained_reason"] = get(worker, "resource.retainedReason")
+        if worker.get("dispatchStatus") in SETTLED and rec.get("status") not in ("succeeded", "failed"):
+            rec["status"] = worker.get("dispatchStatus")
+        resource_worktree = get(worker, "resource.worktreeId")
+        if (inventories_ok and worker.get("dispatchStatus") in SETTLED
+                and rec["terminal_state"] == "retained" and rec["retained_reason"] == "user_takeover"
+                and worker.get("agentTerminalHandle") not in active_terms
+                and resource_worktree not in active_worktrees
+                and not os.path.isdir(rec.get("path") or "")):
+            rec["terminal_state"] = "gone"
+    save_run(data)
     for task_id, rec in sorted(data["tasks"].items()):
         row = {"task": task_id, "status": rec.get("status"), "terminal_state": rec.get("terminal_state"),
                "path": rec.get("path"), "branch": rec.get("branch"), "dirty": None, "unpushed": None, "pr": None,
@@ -1342,20 +1442,27 @@ def status_rows(run: str, data: Dict[str, Any], with_git: bool = True) -> List[D
         if with_git and path and os.path.isdir(path):
             row["dirty"] = len(git(path, "status", "--porcelain").splitlines())
             ahead = git(path, "rev-list", "--count", "@{u}..HEAD")
-            if not ahead.isdigit():
-                base = git(path, "symbolic-ref", "--short", "refs/remotes/origin/HEAD") or "origin/main"
-                ahead = git(path, "rev-list", "--count", f"{base}..HEAD")
-            row["unpushed"] = int(ahead) if ahead.isdigit() else "no-upstream"
+            if not ahead.isdigit() and rec.get("branch"):
+                ahead = git(path, "rev-list", "--count", f"origin/{rec['branch']}..HEAD")
             if rec.get("branch") and shutil_which("gh"):
                 pr = subprocess.run(["gh", "pr", "list", "--head", rec["branch"], "--state", "all", "--limit", "1",
-                                     "--json", "number,state,url"], cwd=path, capture_output=True, text=True)
+                                     "--json", "number,state,url,headRefOid"], cwd=path, capture_output=True, text=True)
                 try:
                     found = json.loads(pr.stdout or "[]")
                 except ValueError:
                     found = []
                 if found:
                     row["pr"] = f"#{found[0].get('number')} {found[0].get('state', '').lower()}"
-        if rec.get("dispatch") and row["status"] not in SETTLED:
+                    remote_head = found[0].get("headRefOid")
+                    local_head = git(path, "rev-parse", "HEAD")
+                    if remote_head == local_head:
+                        ahead = "0"
+                    elif remote_head:
+                        from_pr = git(path, "rev-list", "--count", f"{remote_head}..HEAD")
+                        if from_pr.isdigit():
+                            ahead = from_pr
+            row["unpushed"] = int(ahead) if ahead.isdigit() else "unknown"
+        if rec.get("dispatch") and row["status"] not in TASK_DONE:
             row["agentWait"] = agent_wait(rec["dispatch"])
         row["questions"] = [q for q, t in data.get("questions", {}).items() if t == task_id]
         rows.append(row)
@@ -1427,7 +1534,7 @@ def cmd_cleanup(ns: argparse.Namespace) -> int:
     run = require_run(ns)
     data = load_run(run)
     rows = status_rows(run, data)
-    removed, kept = [], []
+    removed, gone, kept = [], [], []
     for r in rows:
         why = []
         if r["status"] not in ("completed", "succeeded"):
@@ -1438,6 +1545,10 @@ def cmd_cleanup(ns: argparse.Namespace) -> int:
             why.append(f"unpushed {r['unpushed']}")
         if r["pr"] and not any(s in r["pr"] for s in ("merged", "closed")):
             why.append(f"PR {r['pr']}")
+        if r["status"] in ("completed", "succeeded") and r["terminal_state"] in ("gone", "released") \
+                and (not r["path"] or not os.path.isdir(r["path"])):
+            gone.append({"task": r["task"], "path": r["path"]})
+            continue
         if not r["path"] or not os.path.isdir(r["path"]):
             why.append("no worktree path")
         elif os.path.realpath(r["path"]) == os.path.realpath(git(os.getcwd(), "rev-parse", "--show-toplevel") or "/nonexistent"):
@@ -1455,10 +1566,11 @@ def cmd_cleanup(ns: argparse.Namespace) -> int:
             orca("worktree", "rm", "--worktree", f"id:{wt}")
         removed.append({"task": r["task"], "path": r["path"], "worktree": wt})
     lines = [f"{'rm     ' if ns.apply else 'would  '}{x['task']}  {x['path']}" for x in removed]
+    lines += [f"gone   {x['task']}  {x['path']}" for x in gone]
     lines += [f"keep   {x['task']}  {x['path']}  ({'; '.join(x['why'])})" for x in kept]
     if not ns.apply and removed:
         lines.append("dry run; add --apply to remove")
-    emit(ns, {"removed": removed, "kept": kept, "applied": ns.apply}, [], lines or ["nothing to clean"])
+    emit(ns, {"removed": removed, "gone": gone, "kept": kept, "applied": ns.apply}, [], lines or ["nothing to clean"])
     return EXIT_OK
 
 
@@ -1494,6 +1606,10 @@ def cmd_spec(ns: argparse.Namespace) -> int:
 
 def creds_path(task: str) -> Path:
     return home() / "workers" / f"{task}.json"
+
+
+def heartbeat_path(task: str, suffix: str) -> Path:
+    return home() / "workers" / f"{task}.heartbeat-{suffix}"
 
 
 def load_creds(task: str) -> Dict[str, Any]:
@@ -1583,11 +1699,59 @@ def cmd_w_init(ns: argparse.Namespace) -> int:
             dispatch = None
     view = {"task": found["task"], "dispatch": dispatch, "from": stored.get("from"),
             "capability": "stored" if stored.get("capability") else None, "state_file": str(path)}
+    heartbeat = start_heartbeat(found["task"])
     emit(ns, view, [], [
         f"init   task {found['task']}  dispatch {dispatch or '?'}  from {view['from'] or '?'}  "
         f"capability {view['capability'] or 'MISSING'}",
-        f"       stored in {tilde(path)}; later `orcw w` commands need no flags",
+        f"       stored in {tilde(path)}; later `orcw w` commands need no flags; "
+        f"heartbeat {'automatic' if heartbeat else 'disabled'}",
     ])
+    return EXIT_OK
+
+
+def start_heartbeat(task: str) -> bool:
+    try:
+        interval = float(os.environ.get("ORCW_HEARTBEAT_INTERVAL", "300"))
+    except ValueError:
+        interval = 300
+    if interval <= 0:
+        return False
+    heartbeat_path(task, "stop").unlink(missing_ok=True)
+    try:
+        subprocess.Popen(
+            [sys.executable, str(Path(__file__).resolve()), "w", "_heartbeat-loop", "--task", task],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True, close_fds=True,
+        )
+    except OSError:
+        return False
+    return True
+
+
+def cmd_w_heartbeat_loop(ns: argparse.Namespace) -> int:
+    import fcntl
+    lock_path = heartbeat_path(ns.task, "lock")
+    stop_path = heartbeat_path(ns.task, "stop")
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return EXIT_OK
+        interval = max(float(os.environ.get("ORCW_HEARTBEAT_INTERVAL", "300")), 0.1)
+        while not stop_path.exists():
+            probe = argparse.Namespace(task=ns.task, dispatch=None, run=None,
+                                       from_handle=None, capability=None)
+            try:
+                ids = worker_ids(probe)
+                args = ["orchestration", "send", "--type", "heartbeat", "--subject", "alive",
+                        "--task-id", ids["task"], "--dispatch-id", ids["dispatch"]]
+                orca(*(args + worker_send_args(ids, need_capability=False)))
+            except (OrcaError, Refused):
+                return EXIT_OK
+            deadline = time.monotonic() + interval
+            while not stop_path.exists() and time.monotonic() < deadline:
+                time.sleep(max(0, min(0.5, deadline - time.monotonic())))
     return EXIT_OK
 
 
@@ -1621,8 +1785,7 @@ def _worker_ids(ns: argparse.Namespace) -> Dict[str, Any]:
             if real and rec.get("path") and os.path.realpath(rec["path"]) == real:
                 hits.append((os.path.getmtime(f), rec))
         hits.sort(key=lambda h: (h[0], h[1].get("task") or ""), reverse=True)
-        done_states = SETTLED | {"succeeded", "failed"}
-        live = [rec for _, rec in hits if rec.get("status") not in done_states and rec.get("dispatch")]
+        live = [rec for _, rec in hits if rec.get("status") not in TASK_DONE and rec.get("dispatch")]
         # Several tasks can share one worktree; the cache may lag, so let Orca confirm which is active.
         for rec in live:
             try:
@@ -1653,13 +1816,11 @@ def cmd_w_ids(ns: argparse.Namespace) -> int:
 
 
 def cmd_w_mail(ns: argparse.Namespace) -> int:
-    args = ["orchestration", "check", "--peek"]
-    try:
-        creds = load_creds(worker_ids(ns)["task"])
-        if creds.get("from"):
-            args += ["--terminal", creds["from"]]
-    except (Refused, OrcaError):
-        pass
+    ids = worker_ids(ns)
+    creds = load_creds(ids["task"])
+    if not creds.get("from"):
+        raise Refused("no terminal handle stored for this task; run `orcw w init` with --from from your preamble")
+    args = ["orchestration", "check", "--unread", "--terminal", creds["from"]]
     docs = orca(*args)
     res = result(docs)
     messages = res.get("messages") or []
@@ -1710,18 +1871,30 @@ def cmd_w_resume(ns: argparse.Namespace) -> int:
 
 def cmd_w_done(ns: argparse.Namespace) -> int:
     ids = worker_ids(ns)
-    body = read_spec(ns.body) if ns.body else ""
+    if ns.summary:
+        if ns.subject or ns.body:
+            raise Refused("--summary/--report cannot be combined with the legacy subject/--body form")
+        if not ns.report:
+            raise Refused("--report <file|-> is required with --summary")
+        subject, body_source = ns.summary, ns.report
+        report_path = None if ns.report == "-" else ns.report
+    else:
+        if not ns.subject or not ns.body:
+            raise Refused("use --summary <text> --report <file|->")
+        subject, body_source, report_path = ns.subject, ns.body, ns.report
+    body = read_spec(body_source)
     if not body.strip():
-        raise Refused("--body <file|-> is required: what changed, what you found, what remains")
+        raise Refused("completion report is empty")
     outcome = "succeeded" if ns.ok else "failed"
-    args = ["orchestration", "send", "--type", "worker_done", "--subject", ns.subject, "--body", body,
+    args = ["orchestration", "send", "--type", "worker_done", "--subject", subject, "--body", body,
             "--task-id", ids["task"], "--dispatch-id", ids["dispatch"], "--outcome", outcome]
     args += worker_send_args(ids, need_capability=not ns.no_capability)
     if ns.files:
         args += ["--files-modified", ns.files]
-    if ns.report:
-        args += ["--report-path", ns.report]
+    if report_path:
+        args += ["--report-path", report_path]
     docs = orca(*args)
+    heartbeat_path(ids["task"], "stop").write_text("done\n")
     view = project(result(docs), "send")
     view.update(ids)
     view["outcome"] = outcome
@@ -1900,7 +2073,8 @@ def build_parser() -> argparse.ArgumentParser:
         "w", help="worker side: init, ids, mail, heartbeat, ask, resume, done",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Order: init once, then ids / heartbeat / mail / ask as needed, then done once and idle.\n"
+            "Order: init once, then ids / mail / ask as needed, then done once and idle.\n"
+            "Init starts automatic heartbeats; heartbeat is available for explicit phase changes.\n"
             "\n"
             "Shared flags (every verb):\n"
             "  --task <id> --dispatch <id>      override the worktree-based lookup of your task\n"
@@ -1911,23 +2085,26 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     ws = w.add_subparsers(dest="w_cmd", metavar="init|ids|mail|heartbeat|ask|resume|done")
-    q = ws.add_parser("init", help="paste your preamble once: `w init --preamble-file - <<'P' ... P` (stores from + capability)")
-    q.add_argument("--preamble-file", help="- for stdin (paste the preamble), or a file holding it; the two values are parsed out")
-    q.add_argument("--from", dest="from_handle", help="alternative to --preamble-file: your --from handle")
+    q = ws.add_parser("init", help="store --from and --capability from the injected preamble; starts heartbeats")
+    q.add_argument("--preamble-file", help="compatibility form: - for stdin, or a file holding the preamble")
+    q.add_argument("--from", dest="from_handle", help="your --from handle from the preamble")
     q.add_argument("--dispatch-capability", "--capability", dest="capability",
                    help="alternative to --preamble-file: your --dispatch-capability token")
     q.add_argument("--task")
     q.add_argument("--dispatch")
     add_common(q)
     q.set_defaults(fn=cmd_w_init)
-    q = ws.add_parser("heartbeat", help="liveness signal the preamble asks for every 5 minutes")
+    q = ws.add_parser("heartbeat", help="send an immediate heartbeat with a phase update")
     q.add_argument("phase", choices=["investigating", "implementing", "reviewing", "waiting"])
     add_worker_common(q)
     q.set_defaults(fn=cmd_w_heartbeat)
+    q = ws.add_parser("_heartbeat-loop")
+    q.add_argument("--task", required=True)
+    q.set_defaults(fn=cmd_w_heartbeat_loop)
     q = ws.add_parser("ids", help="this worktree's task/dispatch/run; refuses if the dispatch is settled")
     add_worker_common(q)
     q.set_defaults(fn=cmd_w_ids)
-    q = ws.add_parser("mail", help="unread coordinator messages for this terminal (peek, non-consuming)")
+    q = ws.add_parser("mail", help="read new coordinator messages for this terminal")
     add_worker_common(q)
     q.set_defaults(fn=cmd_w_mail)
     q = ws.add_parser("ask", help="block on a coordinator answer")
@@ -1941,14 +2118,15 @@ def build_parser() -> argparse.ArgumentParser:
     q.add_argument("--timeout", default="10m", help="how long to block: 600, 600s, 10m, or 1h (default 10m)")
     add_worker_common(q)
     q.set_defaults(fn=cmd_w_resume)
-    q = ws.add_parser("done", help="send worker_done once; --ok or --failed is required")
+    q = ws.add_parser("done", help="send worker_done once with --summary and --report")
     g = q.add_mutually_exclusive_group(required=True)
     g.add_argument("--ok", action="store_true")
     g.add_argument("--failed", action="store_true")
-    q.add_argument("subject")
-    q.add_argument("--body", required=True, help="file or - for stdin")
+    q.add_argument("subject", nargs="?", help="legacy subject; prefer --summary")
+    q.add_argument("--summary", help="short completion status")
+    q.add_argument("--body", help="legacy report input; prefer --report")
     q.add_argument("--files", help="comma-separated changed files")
-    q.add_argument("--report", help="report path")
+    q.add_argument("--report", help="full report file, or - for stdin")
     q.add_argument("--no-capability", action="store_true", help="send without a stored capability (Orca will likely reject)")
     add_worker_common(q)
     q.set_defaults(fn=cmd_w_done)

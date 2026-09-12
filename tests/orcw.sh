@@ -1,13 +1,7 @@
 #!/usr/bin/env bash
 
-# Regression for bin/orcw + lib/orcw.py against a fake `orca` that replays
-# JSON shapes recorded from Orca 1.4.194. No live Orca is needed.
-#
-# Covers: doctor (ok and a missing flag), run, task (worker-start path and the
-# dispatch --inject fallback), --after prepending the upstream report, wait
-# (multi-document stdout plus stderr keepalives; empty delivery is exit 0),
-# done refusing an unanswered question then releasing + acking, w ids
-# refusing a settled dispatch, and Orca errors printed whole with nextSteps.
+# Regression for bin/orcw + lib/orcw.py against a fake Orca 1.4.194. No live
+# Orca is needed.
 
 set -euo pipefail
 
@@ -23,8 +17,9 @@ export ORCW_HOME="$TEST_ROOT/orcw"
 export ORCA_CLI_COMMAND="$FAKE_BIN/orca"
 # Whether orcw is on PATH varies by machine; pin what the trailer tells workers to run.
 export ORCW_CMD="$REPO/bin/orcw"
+export ORCW_HEARTBEAT_INTERVAL=0
 export FAKE_LOG="$LOG" FAKE_WT="$WT"
-export FAKE_WORKER_START=ok FAKE_CHECK=msgs FAKE_DISPATCH_STATUS=dispatched FAKE_HELP_MISSING="" FAKE_CREATE=ok FAKE_UPSTREAM=completed
+export FAKE_WORKER_START=ok FAKE_CHECK=msgs FAKE_DISPATCH_STATUS=dispatched FAKE_HELP_MISSING="" FAKE_CREATE=ok FAKE_UPSTREAM=completed FAKE_WORKERS=""
 
 mkdir -p "$FAKE_BIN" "$WT"
 git -C "$WT" init -q
@@ -33,7 +28,7 @@ git -C "$WT" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
 # ---------------------------------------------------------------- fake orca
 cat >"$FAKE_BIN/orca" <<'PY'
 #!/usr/bin/env python3
-import json, os, sys
+import json, os, sys, time
 args = sys.argv[1:]
 with open(os.environ["FAKE_LOG"], "a") as fh:
     fh.write(json.dumps(args) + "\n")
@@ -56,7 +51,7 @@ HELP = {
         "task-list": "--status --ready --brief --run", "worker-start": "--task --on --worktree --agent --terminal --model --effort --run",
         "worker-show": "--dispatch", "worker-read": "--dispatch --source --cursor --limit", "worker-list": "--run",
         "worker-release": "--dispatch", "dispatch": "--task --to --run --inject", "dispatch-show": "--task",
-        "check": "--terminal --run --ack --peek --all --types --wait --timeout-ms",
+        "check": "--terminal --run --ack --unread --peek --all --types --wait --timeout-ms",
         "send": "--subject --to --run --body --type --task-id --dispatch-id --outcome --files-modified --report-path",
         "reply": "--id --body", "ask": "--question --resume --options --timeout-ms", "request-show": "--request"},
     "worktree": {"create": "--name --repo --agent --prompt --setup --base-branch --no-parent", "list": "", "rm": "--worktree --force",
@@ -90,6 +85,8 @@ if a[:2] == ["worktree", "set"]:
 if a[:2] == ["worktree", "show"]:
     ok({"worktree": {"id": "repo-1::" + WT, "path": WT, "branch": "refs/heads/main", "repoId": "repo-1", "isMainWorktree": True}})
 if a[:2] == ["worktree", "create"]:
+    if env("FAKE_CREATE") == "repo_missing":
+        err("repo_not_found", "Repository selector did not resolve.")
     if env("FAKE_CREATE") == "lost":
         out({"id": "x", "ok": False, "error": {"code": "runtime_unavailable", "message": "The Orca runtime closed the connection before responding."}}, 1)
     res = {"worktree": {"id": "repo-1::" + WT, "path": WT, "branch": "refs/heads/user-x/" + flag("--name", "wt"), "repoId": "repo-1"}}
@@ -127,8 +124,18 @@ if a[:2] == ["orchestration", "check"]:
         ok({"acknowledged": flag("--ack")})
     if "--peek" in a:
         ok({"messages": [{"id": "msg_c1", "type": "status", "subject": "pin the tag", "body": "use 0.12.238", "from_handle": "term_coord"}], "count": 1})
+    if "--unread" in a:
+        state = os.path.join(os.environ["ORCW_HOME"], "fake-mail-read")
+        if os.path.exists(state):
+            ok({"messages": [], "count": 0})
+        open(state, "w").write("read\n")
+        ok({"messages": [{"id": "msg_c1", "type": "status", "subject": "pin the tag", "body": "use 0.12.238", "from_handle": "term_coord"}], "count": 1})
     if "--wait" in a:
         sys.stderr.write(json.dumps({"_keepalive": True, "elapsedMs": 15000}) + "\n")
+        sys.stderr.flush()
+        if env("FAKE_CHECK") == "slow":
+            time.sleep(2)
+            ok({"deliveryId": None, "messages": [], "count": 0})
         print(json.dumps({"_keepalive": True, "elapsedMs": 30000}))
     if env("FAKE_CHECK") == "empty":
         ok({"deliveryId": None, "messages": [], "count": 0})
@@ -144,6 +151,11 @@ if a[:2] == ["orchestration", "check"]:
                      "subject": "Pin by tag or SHA?", "body": "Tag or SHA?", "payload": json.dumps({"taskId": "task_0002", "dispatchId": "ctx_0002"})})
     ok({"deliveryId": "dlv_0001", "messages": msgs, "count": len(msgs)})
 if a[:2] == ["orchestration", "worker-list"]:
+    if env("FAKE_WORKERS") == "retained":
+        ok({"workers": [{"dispatchId": "ctx_gone", "taskId": "task_gone", "runId": "run_test0001",
+            "workerState": "succeeded", "dispatchStatus": "completed", "agentTerminalHandle": "term_gone",
+            "terminalState": "retained", "resource": {"retainedReason": "user_takeover",
+                "worktreeId": "repo-1::" + WT + "-gone"}}]})
     ok({"workers": [], "counts": {}})
 if a[:2] == ["orchestration", "worker-show"]:
     ok({"dispatchId": flag("--dispatch"), "workerState": "unsupervised", "terminalState": "retained",
@@ -168,6 +180,20 @@ if a[:2] == ["orchestration", "task-list"]:
 err("unknown_command", "fake orca does not implement: " + " ".join(a))
 PY
 chmod +x "$FAKE_BIN/orca"
+
+cat >"$FAKE_BIN/gh" <<'SH'
+#!/usr/bin/env bash
+if [ "${1:-}" = pr ] && [ "${2:-}" = list ]; then
+	if [ -n "${FAKE_PR_HEAD:-}" ]; then
+		printf '[{"number":7,"state":"MERGED","url":"https://example.test/pr/7","headRefOid":"%s"}]\n' "$FAKE_PR_HEAD"
+	else
+		printf '[]\n'
+	fi
+	exit 0
+fi
+exit 1
+SH
+chmod +x "$FAKE_BIN/gh"
 
 ORCW="$REPO/bin/orcw"
 export PATH="$FAKE_BIN:$PATH"
@@ -222,15 +248,18 @@ expect_exit 0 "$ORCW" task --spec "$TEST_ROOT/spec.md" --repo demo --name rel --
 out_has "task   task_0001  dispatch ctx_0001  supervised"
 out_has "branch user-x/rel"
 log_has '"worktree", "create", "--name", "rel", "--setup", "run", "--repo", "name:demo", "--no-parent", "--agent", "claude"'
-log_has '"worker-start", "--task", "task_0001", "--run", "run_test0001", "--terminal", "term_agent1"'
+log_has '"worker-start", "--task", "task_0001", "--run", "run_test0001", "--worktree", "id:repo-1::'"$WT"'", "--terminal", "term_agent1"'
 log_lacks '"--inject"'
 grep -q "Branch is user-x/rel in $WT" "$ORCW_HOME/fake-spec-1.md" || fail "placeholders not substituted from the real worktree"
-grep -q "w init --preamble-file - <<'PREAMBLE'" "$ORCW_HOME/fake-spec-1.md" || fail "trailer does not show the one-paste init"
+grep -q "w init --from <handle> --capability <token>" "$ORCW_HOME/fake-spec-1.md" || fail "trailer does not show the short init"
 grep -q "Every \`orcw\` below means \`$REPO/bin/orcw\`" "$ORCW_HOME/fake-spec-1.md" || fail "trailer lacks the launcher path"
-[ "$(grep -n 'not on PATH here' "$ORCW_HOME/fake-spec-1.md" | cut -d: -f1)" -lt "$(grep -n 'w init --preamble-file' "$ORCW_HOME/fake-spec-1.md" | cut -d: -f1)" ] || fail "launcher note must precede init"
-grep -q "superseded" "$ORCW_HOME/fake-spec-1.md" || fail "trailer does not supersede the preamble block"
+grep -q 'w done --ok|--failed --summary "<short status>" --report <file>' "$ORCW_HOME/fake-spec-1.md" || fail "trailer lacks separate completion inputs"
 grep -q "release URL" "$ORCW_HOME/fake-spec-1.md" || fail "--report not in trailer"
 [ -f "$ORCW_HOME/runs/run_test0001/tasks/task_0001.json" ] || fail "per-task cache file missing"
+
+: >"$LOG"
+FAKE_CREATE=repo_missing expect_exit 1 "$ORCW" task --spec "$TEST_ROOT/spec.md" --repo missing --name missing
+err_has "orca repo add --path <checkout>"
 
 # ---------------------------------------------------------------- task: default placement is the current worktree
 : >"$LOG"
@@ -266,7 +295,7 @@ FAKE_CREATE=lost expect_exit 0 "$ORCW" task --spec "$TEST_ROOT/spec.md" --repo d
 out_has "note   worktree create: runtime_unavailable; worktree found by name afterwards"
 out_has "task   task_0004  dispatch ctx_0001  supervised"
 log_has '"terminal", "list", "--worktree", "id:repo-1::'"$WT"'-lostwt"'
-log_has '"worker-start", "--task", "task_0004", "--run", "run_test0001", "--terminal", "term_agent1"'
+log_has '"worker-start", "--task", "task_0004", "--run", "run_test0001", "--worktree", "id:repo-1::'"$WT"'-lostwt", "--terminal", "term_agent1"'
 
 # ---------------------------------------------------------------- task --after: completed upstream is prepended now
 : >"$LOG"
@@ -311,6 +340,17 @@ log_has '"check", "--run", "run_test0001", "--wait", "--types", "worker_done,esc
 FAKE_CHECK=empty expect_exit 0 "$ORCW" wait --timeout 1m
 out_has "quiet  no messages in 1m; 0 worker(s) live; this is a checkpoint, not a failure"
 out_has "task_0001  succeeded"
+
+FAKE_CHECK=slow "$ORCW" wait --timeout 1m >"$TEST_ROOT/slow-out" 2>"$TEST_ROOT/slow-err" &
+slow_pid=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	grep -q "wait   15s elapsed" "$TEST_ROOT/slow-err" 2>/dev/null && break
+	sleep 0.1
+done
+grep -q "wait   15s elapsed" "$TEST_ROOT/slow-err" || fail "wait keepalive was not streamed"
+FAKE_CHECK=slow expect_exit 2 "$ORCW" wait --timeout 1m
+err_has "another orcw wait is already running"
+wait "$slow_pid"
 
 : >"$LOG"
 FAKE_CHECK=rejected expect_exit 0 "$ORCW" wait --timeout 1m
@@ -369,8 +409,26 @@ err_has "expects TASK=NEXT_TASK"
 expect_exit 0 "$ORCW" status
 out_has "task_0001  succeeded"
 out_has "user-x/rel"
+FAKE_PR_HEAD=$(git -C "$WT" rev-parse HEAD) expect_exit 0 "$ORCW" status --json
+[ "$(jq -r '.tasks[] | select(.task == "task_0001") | .unpushed' "$TEST_ROOT/out")" = "0" ] ||
+	fail "matching PR head was not recognized as pushed"
+
+run_cache="$ORCW_HOME/runs/run_test0001.json"
+jq --arg path "$WT-gone" '.tasks.task_gone = {
+  "status": "succeeded", "title": "gone", "path": $path,
+  "branch": "user-x/gone", "worktree": ("repo-1::" + $path), "dispatch": "ctx_gone"
+} | .tasks.task_released = {
+  "status": "succeeded", "title": "released", "path": ($path + "-released"),
+  "branch": "user-x/released", "worktree": ("repo-1::" + $path + "-released"),
+  "dispatch": "ctx_released", "terminal_state": "released"
+}' "$run_cache" >"$TEST_ROOT/run.json"
+mv "$TEST_ROOT/run.json" "$run_cache"
+FAKE_WORKERS=retained expect_exit 0 "$ORCW" status
+out_has "task_gone  succeeded  gone"
 : >"$LOG"
-expect_exit 0 "$ORCW" cleanup
+FAKE_WORKERS=retained expect_exit 0 "$ORCW" cleanup
+out_has "gone   task_gone"
+out_has "gone   task_released"
 log_lacks '"worktree", "rm"'
 
 # ---------------------------------------------------------------- worker side
@@ -409,9 +467,18 @@ expect_exit 0 env -C "$WT" "$ORCW" w heartbeat implementing
 log_has '"--type", "heartbeat", "--subject", "alive", "--task-id", "task_0006", "--dispatch-id", "ctx_0001", "--phase", "implementing", "--from", "term_agent1", "--dispatch-capability", "cap_secret_123"'
 
 : >"$LOG"
-expect_exit 0 env -C "$WT" "$ORCW" w "done" --ok "Done" --body "$TEST_ROOT/report.md" --files a.tf,b.tf
+ORCW_HEARTBEAT_INTERVAL=0.1 expect_exit 0 env -C "$WT" "$ORCW" w init --from term_agent1 --capability cap_secret_123
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+	grep -q '"--type", "heartbeat"' "$LOG" 2>/dev/null && break
+	sleep 0.1
+done
+log_has '"--type", "heartbeat", "--subject", "alive", "--task-id", "task_0006", "--dispatch-id", "ctx_0001"'
+
+: >"$LOG"
+expect_exit 0 env -C "$WT" "$ORCW" w "done" --ok --summary "Done" --report "$TEST_ROOT/report.md" --files a.tf,b.tf
 out_has "done   task_0006  succeeded  message msg_s1"
 log_has '"send", "--type", "worker_done", "--subject", "Done", "--body", "Did the thing.\\n", "--task-id", "task_0006", "--dispatch-id", "ctx_0001", "--outcome", "succeeded", "--from", "term_agent1", "--dispatch-capability", "cap_secret_123", "--files-modified", "a.tf,b.tf"'
+log_has '"--report-path", "'"$TEST_ROOT/report.md"'"'
 
 # one-shot credentials on the verb itself, for a task with nothing stored
 : >"$LOG"
@@ -426,7 +493,9 @@ log_lacks '"--subject", "Stale"'
 expect_exit 0 env -C "$WT" "$ORCW" w mail
 out_has "mail   1 unread message(s)"
 out_has "pin the tag"
-log_has '"check", "--peek", "--terminal", "term_agent1"' 
+log_has '"check", "--unread", "--terminal", "term_agent1"'
+expect_exit 0 env -C "$WT" "$ORCW" w mail
+out_has "mail   0 unread message(s)"
 
 # ---------------------------------------------------------------- lost-response recovery is read-only
 : >"$LOG"
@@ -437,6 +506,11 @@ log_has '"request-show", "--request", "882fa58b-0000-0000-0000-000000000000"'
 expect_exit 0 "$ORCW" w --help
 out_has "Shared flags (every verb)"
 out_has "--dispatch-capability <token>"
+
+# ---------------------------------------------------------------- terminal reuse remains bound to its worktree
+: >"$LOG"
+expect_exit 0 "$ORCW" "done" dlv_0001 --reuse task_0001=task_0002
+log_has '"worker-start", "--task", "task_0002", "--run", "run_test0001", "--worktree", "id:repo-1::'"$WT"'", "--terminal", "term_agent1"'
 
 # ---------------------------------------------------------------- Orca error envelope printed whole
 : >"$LOG"

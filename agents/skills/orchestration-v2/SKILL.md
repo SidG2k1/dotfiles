@@ -53,19 +53,17 @@ Manual form: `orcw wait`, then `orcw done <delivery> [--reuse <task>=<next>]`.
 
 ## Worker (your spec carries an orcw working agreement)
 
-    orcw w init --preamble-file - <<'P'   # paste your whole preamble; once
-    ...
-    P
+    orcw w init --from <handle> --capability <token>   # values from your preamble; once
     orcw w ids
-    orcw w heartbeat implementing     # every 5 minutes while working
     orcw w mail                       # before PR, tag, apply, or push
     orcw w ask "<question>" --options yes,no   # --timeout 10m default
-    orcw w done --ok "<subject>" --body report.md --files a,b
+    orcw w done --ok --summary "<status>" --report report.md --files a,b
 
-After init, the preamble's raw `orca orchestration` commands are superseded;
-Orca rejects reports without the token init stored. Exit 2 from a `w` verb is
-orcw refusing (message says why); exit 1 is Orca's error, printed whole. Send
-`done` once, then idle. No sub-workers.
+Init infers the task and dispatch from the worktree and starts automatic
+heartbeats. The preamble-file form remains available for shared worktrees.
+After init, use `orcw w` instead of the preamble's raw commands. Exit 2 from a
+`w` verb is orcw refusing (message says why); exit 1 is Orca's error, printed
+whole. Send `done` once, then idle. No sub-workers.
 
 ## Not wrapped
 
