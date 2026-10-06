@@ -81,7 +81,7 @@
 !/agents/AGENTS.md
 !/agents/SKILLS.md
 !/agents/claude/settings.json
-!/agents/codex/config.toml
+!/agents/claude/statusline.sh
 !/agents/reference/*
 !/agents/skills/agentish-to-english/SKILL.md
 !/agents/skills/anti-slop/SKILL.md

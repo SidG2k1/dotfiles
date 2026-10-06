@@ -67,12 +67,7 @@ for extension in \
 do code --install-extension "$extension"; done
 ```
 
-- **Codex** `~/.codex/config.toml` is `never` in the manifest: Codex rewrites it
-  with installation-specific marketplace paths, MCP servers, and project trust.
-  Start from `agents/codex/config.toml` as a reference and copy keys across by
-  hand.
-- **MCP servers and app integrations**: re-add by signing in. Do not migrate
-  cookie, session, or state files.
+- **MCP servers and app integrations**: re-add by signing in.
 - **GUI permission grants**: Ghostty (and any other terminal) needs
   Accessibility and Automation; AltTab needs Accessibility plus Screen Recording
   (step 5). Mos does nothing until launched and granted Accessibility, then
@@ -174,7 +169,7 @@ pre-native-packages `~/.vim/bundle`.
 | `eza --icons .` → `invalid value '.' for '--icons [<WHEN>]'` | `--icons` takes an *optional* value in eza ≥0.23, so it swallows the next argument | spell the value — `--icons=auto`, which also correctly drops icons when piped — or terminate flags with `-- .`. The tracked `ls`/`la`/`ll`/`lt` aliases and the `~/.zshenv` guard use these respectively; a bare `--icons` anywhere is the bug |
 | vim opens fine but `gc`, `;th`, `:Tabularize`, ALE, and airline do nothing | the plugins are not in `~/.vim/pack/bundle/start/` — not cloned, or still in the old pathogen `~/.vim/bundle` location, which native-package vim never reads | see step 6; `dotfiles-doctor` names the missing ones and flags a leftover `~/.vim/bundle` |
 | Every `git diff` / `git show` / `git add -p` errors | `core.pager = delta` and `delta` is not installed | `brew install git-delta` |
-| Every commit fails with a signing error | your `~/.gitconfig.local` sets `commit.gpgsign = true` but the signer or key is unavailable on this machine | this repo configures no signing, so it is local: fix the signer path and key in `~/.gitconfig.local`, or unset `commit.gpgsign` there |
-| Claude Code status line shows the directory but no model name | the `statusLine` command reads the model out of its JSON stdin with `jq`, and guards on it, so a missing `jq` costs the model half and nothing else | `brew install jq` (it is in `Brewfile`) |
+| Every commit fails with a signing error | your `~/.gitconfig.local` sets `commit.gpgsign = true` but the signer or key is unavailable on this machine | fix the signer path and key in `~/.gitconfig.local`, or unset `commit.gpgsign` there |
+| Claude Code status line shows the directory but no model, context, or rate limits | `~/.claude/statusline.sh` reads its JSON stdin with `jq`, so without `jq` only the git-derived parts render | `brew install jq` (it is in `Brewfile`) |
 | Glyphs render as tofu boxes | no Nerd Font | `brew bundle --file=Brewfile` installs it; then select it in the terminal |
 | Ghostty logs "unknown key" on start | that key is not in your Ghostty version | remove it from the `# >>> dotfiles` block; only append keys the installed version accepts |

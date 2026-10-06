@@ -18,7 +18,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "input=$(cat); model=\"\"; cwd=\"\"; if command -v jq >/dev/null 2>&1; then model=$(printf '%s' \"$input\" | jq -r '.model.display_name // empty'); cwd=$(printf '%s' \"$input\" | jq -r '.workspace.current_dir // empty'); fi; [ -n \"$cwd\" ] || cwd=$PWD; root=$(git -C \"$cwd\" rev-parse --show-toplevel 2>/dev/null); if [ -n \"$root\" ]; then pre=$(git -C \"$cwd\" rev-parse --show-prefix 2>/dev/null); disp=${root##*/}${pre:+/${pre%/}}; else case $cwd in \"$HOME\") disp=\"~\";; \"$HOME\"/*) disp=\"~${cwd#\"$HOME\"}\";; *) disp=$cwd;; esac; fi; if [ -n \"$model\" ]; then printf '%s | %s' \"$model\" \"$disp\"; else printf '%s' \"$disp\"; fi"
+    "command": "bash ~/.claude/statusline.sh"
   },
   "alwaysThinkingEnabled": true,
   "effortLevel": "high",
@@ -32,6 +32,5 @@
   "editorMode": "vim",
   "verbose": true,
   "autoCompactEnabled": false,
-  "agentPushNotifEnabled": true,
-  "voiceEnabled": true
+  "agentPushNotifEnabled": true
 }
