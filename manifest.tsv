@@ -39,10 +39,12 @@ vimrc	~/.vimrc	link	Repo owns the file. The plugins in vim/plugins.txt must be c
 vim/templates	~/.vim/templates	link	Directory symlink. The BufNewFile autocmds in vimrc read ~/.vim/templates/skeleton.* by absolute path, so the whole directory must resolve, not individual files.
 
 # ---- terminal ----
-config/starship.toml	~/.config/starship.toml	link	Prompt config only. Nothing breaks when starship is absent because zshrc guards its init behind command -v. Provides the repo-root-relative path display (truncation_length=0 + truncate_to_repo=true) that the agent status lines also want.
+config/ghostty/appearance.ghostty	~/.config/ghostty/appearance.ghostty	link	Optional existing appearance preset; install it without overriding the active terminal's per-display settings.
+config/starship.toml	~/.config/starship.toml	link	Prompt config only. Nothing breaks when starship is absent because zshrc guards its init behind command -v. Provides the repo-root-relative path display (truncation_length=0 with starship's default truncate_to_repo) that the agent status lines also want.
 config/ghostty/config.ghostty	~/.config/ghostty/config	append-once	Both the tool and the human edit this file, so append a marker-delimited block (# >>> dotfiles managed block >>>) and rewrite only that region. IMPORTANT: ghostty loads BOTH ~/.config/ghostty/config and ~/.config/ghostty/config.ghostty, and config.ghostty is read LAST - verified by setting the same key in both, where config.ghostty won. Keep exactly one of them. A leftover config.ghostty silently overrides this managed block. Ghostty logs an error per unrecognized key, so only append keys the installed version accepts.
 
 # ---- git ----
+config/ssh/github.conf	~/.ssh/config	append-once	Manage only GitHub's existing SSH-over-443 block; preserve local identity settings and tool-owned includes outside the block.
 gitconfig	~/.gitconfig	include	Add [include] path = $DOTFILES/gitconfig to a user-owned ~/.gitconfig, and keep identity in ~/.gitconfig.local (also included). A symlink here destroys the machine's user.email, user.signingkey, and any [filter "lfs"] block written by git-lfs install.
 config/git/ignore	~/.config/git/ignore	link	Global gitignore. Git ships no default file at this path, so a symlink cannot clobber user content.
 
@@ -80,6 +82,8 @@ agents/claude/statusline.sh	~/.claude/statusline.sh	link	statusLine script refer
 agents/codex/config.toml	~/.codex/config.toml	never	Codex rewrites this file in place, adding installation-specific marketplace paths, MCP servers, and project trust. Linking or overwriting it drops that state. A machine-local merge-toml row can manage a preference subset.
 
 # ---- tools ----
+config/atuin/config.toml	~/.config/atuin/config.toml	link	Portable search preferences; history and authentication remain in Atuin's own storage.
+config/opencode/cli.json	~/.config/opencode/cli.json	merge-json	Manage the existing UI preference subset; app-owned debug and experimental settings survive the merge, and provider configuration stays private.
 config/gh/config.yml	~/.config/gh/config.yml	link	gh rewrites this file on `gh config set` and on schema migrations, so with a symlink those edits land in the repo working tree - visible in git status, never lost. Credentials stay in the sibling hosts.yml, which is gitignored and never installed.
 config/vscode/settings.json	~/Library/Application Support/Code/User/settings.json	merge-json	VS Code writes this file from its own settings UI and extensions add keys to it. A symlink would let the UI edit the repo and reformat or drop keys, so jq-merge the tracked subset instead.
 config/yt-dlp/config	~/.config/yt-dlp/config	link	yt-dlp never writes its own config file. The options assume ffmpeg and a node JS runtime; a missing one fails an individual download rather than the shell. Only meaningful with yt-dlp installed (Brewfile.optional).

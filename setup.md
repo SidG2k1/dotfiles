@@ -156,7 +156,14 @@ harder to diagnose than an error. `install.sh` clones them; `dotfiles-doctor`
 reports any that are missing and warns on a leftover pre-native-packages
 `~/.vim/bundle`.
 
-## 7. Troubleshooting
+## 7. Optional Ghostty appearance
+
+The optional Ghostty appearance preset is installed as
+`~/.config/ghostty/appearance.ghostty` and is not loaded automatically. To use it
+on another machine, copy its settings above the managed block in Ghostty's
+`config`; local display adjustments stay outside that block.
+
+## 8. Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |

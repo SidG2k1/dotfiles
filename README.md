@@ -68,7 +68,7 @@ Every seam is untracked, optional, and absent-safe.
 | `~/.zshrc.local` | the `~/.zshrc` stub, after the repo `zshrc` | machine PATH entries, work aliases, anything secret-adjacent |
 | `~/.zshenv.local` | `~/.zshenv`, sourced last | the rare thing *every* zsh needs, scripts included — a PATH entry a script must see, proxy vars. Keep it fast; it runs on every zsh start |
 | `~/.gitconfig.local` | `[include]` in `~/.gitconfig` | identity: name, email, signing key |
-| `~/.ssh/config.local` | `Include` in your own `~/.ssh/config` | per-host blocks — real hostnames never enter this repo |
+| `~/.ssh/config.local` | optional `Include` in the managed SSH block | private identity-agent settings and per-host blocks |
 | `~/.vim/after/plugin/zz-local.vim` | vim's `after/plugin` load path | per-box overrides that must win over plugin defaults |
 | `~/.agents/AGENTS.local.md` | shared instructions explicitly ask agents to read it when present | private or machine-specific guidance; may link into `private/agents/` |
 | `~/.agents/skills.local/<name>/SKILL.md` | symlinked into both agent tools | private skills; the directory may link into `private/agents/skills/` — see `agents/SKILLS.md` |

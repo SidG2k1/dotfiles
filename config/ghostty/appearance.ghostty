@@ -1,0 +1,10 @@
+# Optional appearance preset; local display overrides may differ.
+theme = TokyoNight Storm
+background-opacity = 0.3
+background-opacity-cells = true
+background-blur = macos-glass-regular
+macos-titlebar-style = transparent
+font-size = 14
+window-padding-x = 10
+window-padding-y = 8
+window-padding-balance = true

@@ -129,6 +129,10 @@
 # ---- per-tool config ----
 !/config/starship.toml
 !/config/ghostty/config.ghostty
+!/config/ghostty/appearance.ghostty
+!/config/atuin/config.toml
+!/config/ssh/github.conf
+!/config/opencode/cli.json
 !/config/docker/daemon.json
 !/config/gh/config.yml
 !/config/gnupg/common.conf
