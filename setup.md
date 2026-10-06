@@ -13,10 +13,8 @@ git clone https://github.com/SidG2k1/dotfiles.git ~/dotfiles
 brew bundle --file=~/dotfiles/Brewfile.optional     # per-feature extras; read it first
 ```
 
-The required `Brewfile` is not listed here: `./install.sh` in step 2 runs
-`brew bundle` on it before it touches any config (`--skip-brew` opts out).
-`Brewfile.optional` is the part no script decides for you; it also carries the
-Ghostty and VS Code casks, since this repo installs configs for both.
+`Brewfile.optional` also carries the Ghostty and VS Code casks, since this repo
+installs configs for both.
 
 Homebrew's `shellenv` line goes in `~/.zprofile` or `~/.zshenv` **by hand** — the
 repo does not install `~/.zprofile`, because other tools' installers append to it
@@ -40,7 +38,9 @@ catches for you.
 
 ## 3. Identity, auth, and other human-only steps
 
-None of this is scriptable and none of it belongs in the repo.
+None of this is scriptable and none of it belongs in the repo. Sign in on each
+new machine; never copy auth databases, keychains, token files, cookies,
+sessions, or other app state from an old one.
 
 ```sh
 # Git identity — tracked gitconfig has none, by design
@@ -53,8 +53,7 @@ git config --file ~/.gitconfig.local user.email "<your email>"
 # in ~/.gitconfig.local, where they cannot break another machine.
 ```
 
-- **CLI auth**: `gh auth login`, plus whichever cloud CLIs you use. Sign in; never
-  copy an auth database, keychain, or token file between machines.
+- **CLI auth**: `gh auth login`, plus whichever cloud CLIs you use.
 - **VS Code extensions** — install by identifier rather than copying the
   generated manifest:
 

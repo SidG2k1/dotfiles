@@ -2,7 +2,7 @@
 
 Public, credential-free configuration for a macOS (Apple Silicon) development
 laptop: zsh with vi mode, vim with native packages, Ghostty, starship, and the Claude
-Code / Codex agent setup. No identity, keys, tokens, hostnames, or absolute
+Code / Codex agent setup. No identity, keys, tokens, internal hostnames, or absolute
 `/Users/...` paths are tracked here — those live in machine-local files this repo
 deliberately does not own (see [Machine-local layer](#machine-local-layer)).
 Everything degrades gracefully: a missing tool costs a feature, never `ls`,
@@ -19,9 +19,8 @@ bin/dotfiles-doctor                  # verifies every install landed + deps reso
 
 `install.sh` runs `brew bundle --file=Brewfile` itself (`--skip-brew` opts out);
 the per-feature extras in `Brewfile.optional` are the one dependency step it
-leaves to you. Beyond that it reads `manifest.tsv` and nothing else. Re-running
-it is safe. It never overwrites a file it does not own — see the strategies below
-for why that distinction exists.
+leaves to you. It never overwrites a file it does not own — see the strategies
+below for why that distinction exists.
 
 Then do the parts a script cannot: `setup.md`.
 
@@ -84,8 +83,6 @@ export PATH="$HOME/.cargo/bin:$PATH"
 # ~/.gitconfig.local
 [user]
 	email = <you@your-domain>
-# Commit signing, if you use it, is configured here too - the tracked gitconfig
-# sets none, because the signer path and key are machine-specific.
 
 # ~/.ssh/config.local
 Host build
@@ -116,9 +113,3 @@ whose plugin features are silently inert, or `eza` hanging in a non-TTY shell.
   arriving because it matched nothing.
 - **gitleaks runs in CI** over the working tree and history on every push, so a
   credential cannot land unnoticed even if the allowlist is widened by mistake.
-- **Identity is deliberately absent.** `gitconfig` carries no email and no
-  signing key; they live in `~/.gitconfig.local`, which is included but never
-  tracked. Commit signing therefore does nothing until you create that file.
-- Never copy whole application state directories in. Auth databases, histories,
-  sessions, and project-trust files are excluded on purpose — re-authenticate
-  instead of migrating them.
