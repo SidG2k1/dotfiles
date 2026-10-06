@@ -5,22 +5,18 @@
 # `zsh -c`, CI or an agent's shell goes in this repo's `zshenv` (-> ~/.zshenv),
 # which every zsh reads. The eza stdin/hang guard lives there for that reason.
 #
-# Machine-specific values do not belong in this file - it is public. The last
-# line sources ~/.zshrc.local, which is the seam for them.
+# Machine-specific values do not belong in this file - it is public. The
+# ~/.zshrc stub sources ~/.zshrc.local after this file; that is the seam for them.
 
 # ============================================================================
 # COMPLETION SYSTEM
 # ============================================================================
-# EXTENDED_GLOB is needed here, at the top, for the (#q...) glob qualifier in the
-# cache check below. It used to be set ~200 lines further down, which silently
-# made this whole fast path dead code. (The rest of the globbing options still
-# live in the "Navigation / globbing" section.)
+# EXTENDED_GLOB must be set before the cache check below: without it the (#q...)
+# glob qualifier never matches and every shell takes the slow path.
 setopt EXTENDED_GLOB
 
-# The dump path must be explicit. A bare `compinit` writes ~/.zcompdump, so the
-# old `~/.zcompdump-*` glob could never match anything and every shell paid for a
-# full completion-function scan. Versioning the dump by $ZSH_VERSION also avoids
-# feeding a dump built by another zsh to a freshly upgraded one.
+# The dump path is explicit so the cache check can find it. Versioning it by
+# $ZSH_VERSION avoids feeding a dump built by another zsh to a freshly upgraded one.
 ZSH_COMPDUMP="${XDG_CACHE_HOME:-$HOME/.cache}/zsh/zcompdump-${ZSH_VERSION}"
 [[ -d "${ZSH_COMPDUMP:h}" ]] || mkdir -p "${ZSH_COMPDUMP:h}"
 
@@ -39,6 +35,7 @@ else
 fi
 zstyle ':completion:*' menu select
 zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}'
+setopt COMPLETE_IN_WORD
 
 # Colored man pages
 export LESS_TERMCAP_mb=$'\e[1;31m'
@@ -52,12 +49,10 @@ export LESS_TERMCAP_ue=$'\e[0m'
 # ============================================================================
 # PATH
 # ============================================================================
-# -U keeps $path (and therefore $PATH) unique: re-sourcing this file, nested
-# shells, and tool hooks that prepend their own bin dir stop accumulating dupes.
-typeset -U path PATH
-
-export PATH="$HOME/bin:$PATH"
-export PATH="$HOME/.local/bin:$PATH"
+# Login shells run path_helper from /etc/zprofile after ~/.zshenv, which moves
+# the entries zshenv prepended behind the system paths. Prepend them again;
+# zshenv's `typeset -U path` keeps only the first copy.
+path=("$HOME/.local/bin" "$HOME/bin" ${PROTO_HOME:+$PROTO_HOME/shims} ${PROTO_HOME:+$PROTO_HOME/bin} $path)
 
 # Homebrew prefix, used below for brew-installed plugins and SDKs.
 # `brew shellenv` normally exports it from ~/.zprofile, but this repo does not
@@ -177,14 +172,6 @@ alias fsz='du -sh '
 alias ssh='ssh -o VisualHostKey=yes'
 alias symcrypt='gpg -c --no-symkey-cache'
 
-# yt-dlp has no self-update path when installed as a uv tool; remind, then run.
-if (( $+commands[yt-dlp] )); then
-  yt-dlp() {
-    print -r -- 'Manual update: uv tool upgrade yt-dlp'
-    command yt-dlp "$@"
-  }
-fi
-
 # Mount the personal cloud drive. Needs rclone plus a remote named "onedrive"
 # configured by `rclone config` (machine-local, never in this repo).
 (( $+commands[rclone] )) && alias onedrive='rclone --vfs-cache-mode writes mount onedrive: ~/OneDrive &'
@@ -216,18 +203,15 @@ git-switch() {
 # ============================================================================
 # HISTORY
 # ============================================================================
-export HISTSIZE=1000000
-export SAVEHIST=1000000
-export HISTFILE="$HOME/.zsh_history"
+HISTSIZE=1000000
+SAVEHIST=1000000
+HISTFILE="$HOME/.zsh_history"
 setopt HIST_IGNORE_ALL_DUPS
 setopt HIST_IGNORE_SPACE
 setopt HIST_REDUCE_BLANKS
 setopt HIST_FIND_NO_DUPS
 setopt HIST_SAVE_NO_DUPS
 setopt EXTENDED_HISTORY
-setopt APPEND_HISTORY
-# SHARE_HISTORY already implies INC_APPEND_HISTORY (it imports and appends as you
-# go), so setting both is redundant.
 setopt SHARE_HISTORY
 
 # Navigation / globbing QoL  (EXTENDED_GLOB is set at the top of this file)
@@ -251,10 +235,8 @@ command -v starship >/dev/null && eval "$(starship init zsh)"
 # ============================================================================
 # KEY BINDINGS
 # ============================================================================
-# vi mode. `bindkey -v` and `set -o vi` are the same operation; only one is kept.
 bindkey -v
-export KEYTIMEOUT=1
-# Ctrl-R / Ctrl-T / Alt-C come from fzf's shell integration below.
+KEYTIMEOUT=1
 
 # ============================================================================
 # VI-MODE CURSOR SHAPE
@@ -299,8 +281,7 @@ fi
 # ============================================================================
 # zsh-syntax-highlighting wraps the zle widgets that exist when it is sourced, so
 # it has to come after every `zle -N` above and after fzf's integration (which
-# rebinds Ctrl-R/Ctrl-T). It used to be sourced before both, despite the comment
-# claiming otherwise. Autosuggestions goes immediately before it.
+# rebinds Ctrl-R/Ctrl-T). Autosuggestions goes immediately before it.
 if [ -f "$HOMEBREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]; then
   ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
   source "$HOMEBREW_PREFIX/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
@@ -310,20 +291,10 @@ if [ -f "$HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.
   source "$HOMEBREW_PREFIX/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
 fi
 
-# ============================================================================
-# MACHINE-LOCAL OVERRIDES — must be last
-# ============================================================================
-# The one seam for everything that cannot be in a public repo or is true of only
-# one machine: work aliases, extra PATH entries, tokens, host-specific paths.
-# Untracked by design; absent on a fresh machine, hence the -f guard.
-#
-# Sourced here AND named by the stub install.sh writes to ~/.zshrc, because
-# either file may be the only one in play: the stub is what a `wrap` install
-# produces, this line is what survives if someone symlinks this file directly.
-# The marker keeps that belt-and-braces from running the file twice - measured:
-# without it a `path+=` or a counter in ~/.zshrc.local executed on every shell
-# twice. The stub tests the same variable before sourcing.
-if [ -f "$HOME/.zshrc.local" ] && [ -z "${_DOTFILES_ZSHRC_LOCAL_SOURCED:-}" ]; then
-  _DOTFILES_ZSHRC_LOCAL_SOURCED=1
-  source "$HOME/.zshrc.local"
+# Preserve command editing shortcuts in vi insert mode.
+bindkey -M viins '^A' beginning-of-line
+bindkey -M viins '^E' end-of-line
+bindkey -M viins '^?' backward-delete-char
+if (( ${+widgets[autosuggest-accept]} )); then
+  bindkey -M viins '^ ' autosuggest-accept
 fi

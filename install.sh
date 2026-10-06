@@ -427,12 +427,7 @@ do_wrap() {
 		printf '# Repo config:   %s\n' "$(display_path "$src_abs")"
 		printf '# Machine-local: %s (untracked, optional, sourced last)\n' "$(display_path "$localfile")"
 		printf 'source "%s"\n' "$(shell_path "$src_abs")"
-		# The repo file sources the .local tail itself and sets the marker below.
-		# Testing it here keeps the stub working on its own (if the repo file ever
-		# stops doing it) without sourcing the .local file twice per shell, which
-		# would run any `path+=` or counter in it two times.
-		printf '[ -z "${_DOTFILES_ZSHRC_LOCAL_SOURCED:-}" ] && [ -r "%s" ] && source "%s"\n' \
-			"$(shell_path "$localfile")" "$(shell_path "$localfile")"
+		printf '[ -r "%s" ] && source "%s"\n' "$(shell_path "$localfile")" "$(shell_path "$localfile")"
 		printf ':\n'
 	} >"$tmp"
 

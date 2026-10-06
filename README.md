@@ -66,7 +66,7 @@ Every seam is untracked, optional, and absent-safe.
 
 | Seam file | Pulled in by | Holds |
 | --- | --- | --- |
-| `~/.zshrc.local` | the repo `zshrc`, sourced as its last line | machine PATH entries, work aliases, anything secret-adjacent |
+| `~/.zshrc.local` | the `~/.zshrc` stub, after the repo `zshrc` | machine PATH entries, work aliases, anything secret-adjacent |
 | `~/.zshenv.local` | `~/.zshenv`, sourced last | the rare thing *every* zsh needs, scripts included — a PATH entry a script must see, proxy vars. Keep it fast; it runs on every zsh start |
 | `~/.gitconfig.local` | `[include]` in `~/.gitconfig` | identity: name, email, signing key |
 | `~/.ssh/config.local` | `Include` in your own `~/.ssh/config` | per-host blocks — real hostnames never enter this repo |

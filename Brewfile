@@ -42,7 +42,7 @@ brew "git-delta"
 # falls back to zsh's plain search and git-switch cannot run.
 brew "fzf"
 
-# Provides `z` for directory jumping; zshrc caches `zoxide init zsh`. Without it
+# Provides `z` for directory jumping; zshrc runs `zoxide init zsh`. Without it
 # `z` does not exist (plain `cd` is unaffected).
 brew "zoxide"
 

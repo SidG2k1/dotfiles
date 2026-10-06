@@ -17,10 +17,6 @@
 # two-minute timeout). Every `ls` an agent or CI job runs through this shell then
 # hangs until something kills it.
 #
-# This wrapper cannot live in zshrc. zshrc is sourced only by interactive shells,
-# which is exactly the case that was never broken — the hang happens in the
-# shells that skip zshrc entirely. Hence: zshenv.
-#
 # Two details that are easy to get wrong:
 #   * The appended path is `-- .`, not `.`. eza >= 0.23 gives --icons an OPTIONAL
 #     value, so `eza --icons .` is rejected with
@@ -56,6 +52,18 @@ if command -v eza >/dev/null 2>&1; then
     fi
   }
 fi
+
+# Guarded toolchain setup is also needed by scripts and agents.
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
+
+if [ -d "$HOME/.proto" ]; then
+  export PROTO_HOME="$HOME/.proto"
+  export PATH="$PROTO_HOME/shims:$PROTO_HOME/bin:$PATH"
+fi
+
+# Executable user tools must also be visible to scripts and agents.
+typeset -U path
+path=("$HOME/.local/bin" "$HOME/bin" $path)
 
 # Machine-local seam for things every zsh needs (rare — PATH entries a script
 # must see, proxy vars). Keep it fast; it runs for every script too.
