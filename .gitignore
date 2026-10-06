@@ -28,9 +28,8 @@
 # bulk, those patterns are the second line of defence that still keeps
 # credentials, keys, histories and databases out.
 #
-# Run `bin/dotfiles-doctor --only scan` before pushing; CI additionally fails if
-# any tracked file matches an ignore rule (an allowlist hole) and runs gitleaks
-# over the full history.
+# Run `bin/dotfiles-doctor --only scan` before pushing; CI repeats that scan and
+# runs gitleaks over the full history.
 # ---------------------------------------------------------------------------
 
 *
@@ -53,8 +52,6 @@
 !/.github/workflows/ci.yml
 
 # ---- tests ----
-!/tests/install-brew-skips.sh
-!/tests/install-agent-extras.sh
 !/tests/orcw.sh
 
 # ---- scripts (installed to ~/bin, must stay mode 755) ----

@@ -2,9 +2,8 @@
 #
 # orcw - launcher for lib/orcw.py, the Orca orchestration wrapper.
 #
-# This file exists so bin/ stays all-bash for CI's `bash -n` and shellcheck,
-# and so ~/bin/orcw (a manifest symlink) finds the implementation inside the
-# clone regardless of where the clone lives. Prefers `uv run --script` (the
+# This file exists so ~/bin/orcw (a manifest symlink) finds the implementation
+# inside the clone regardless of where the clone lives. Prefers `uv run --script` (the
 # file carries inline script metadata); falls back to python3.
 #
 # Usage and exit codes: orcw --help

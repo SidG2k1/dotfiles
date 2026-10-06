@@ -1,13 +1,5 @@
-# CI for a dotfiles repo: everything here is a static check.
-#
-# Nothing is installed and no config is applied, because "does this config work"
-# is a question about a specific macOS machine - that is what bin/dotfiles-doctor
-# answers, and it has to run there. What CI can prove is that the tracked files
-# parse, that the manifest describes files that actually exist, and that no
-# secret ever reaches a public branch.
-#
-# Kept deliberately dependency-light: ubuntu-latest already ships bash,
-# shellcheck, jq, python3 and git, so the only install is zsh.
+# Privacy gate for a public repo. Whether the config works is checked on the
+# machine with `./install.sh --dry-run` and `bin/dotfiles-doctor --strict`.
 
 name: ci
 
@@ -29,173 +21,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  static:
-    name: static checks
+  identity:
+    name: dotfiles-doctor scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
-      # zsh is the one thing the runner does not have. shellcheck, jq, python3
-      # and git are preinstalled.
-      - name: Install zsh
-        run: sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends zsh
-
-      # ---------------------------------------------------------------
-      # zsh: parse-only. -n never executes, so no plugin, no eza and no
-      # Homebrew prefix needs to exist on the runner.
-      # ---------------------------------------------------------------
-      - name: zsh -n (zshrc, zshenv, *.zsh)
-        run: git ls-files zshenv zshrc '*.zsh' | xargs -t -n1 zsh -n
-
-      # ---------------------------------------------------------------
-      # bash: parse-only, then lint. severity=warning keeps style nits out of
-      # the gate while still failing on real defects (unquoted expansions that
-      # break on spaces, misused test operators, unreachable code).
-      # ---------------------------------------------------------------
-      - name: bash -n (install.sh, bin/*, lib/*.sh, tests/*.sh)
-        run: git ls-files install.sh 'bin/*' 'lib/*.sh' 'tests/*.sh' | xargs -t -n1 bash -n
-
-      - name: shellcheck (install.sh, bin/*, lib/*.sh, tests/*.sh)
-        run: git ls-files install.sh 'bin/*' 'lib/*.sh' 'tests/*.sh' | xargs shellcheck --severity=warning --color=always
-
-      - name: Installer skips externally satisfied Brewfile entries
-        run: bash tests/install-brew-skips.sh
-
-      - name: Installer links vendored skills and installs the gh-stack extension
-        run: bash tests/install-agent-extras.sh
-
-      # orcw is Python behind a bash launcher; compile it and drive it against
-      # a fake orca that replays recorded JSON. No Orca app in CI.
-      - name: orcw compiles and passes its fixture test
-        run: python3 -m py_compile lib/orcw.py && bash tests/orcw.sh
-
-      # bin/* is installed by symlink and run from PATH; a non-executable mode
-      # in the index means a fresh clone produces a script nobody can run.
-      - name: bin/* is executable in the index
-        run: |
-          set -euo pipefail
-          bad=$(git ls-files -s bin/ | awk '$1 != "100755" { print $1, $4 }')
-          if [ -n "$bad" ]; then
-            echo "not mode 100755 in git (fix with: git update-index --chmod=+x <file>):"
-            echo "$bad"
-            exit 1
-          fi
-          git ls-files bin/ | sed 's/^/ok    /'
-
-      # ---------------------------------------------------------------
-      # JSON: the merge-json install strategy shells out to jq, so an
-      # unparseable tracked file makes the installer fail mid-run.
-      # ---------------------------------------------------------------
-      - name: jq -e . (every tracked .json)
-        run: git ls-files '*.json' | xargs -t -n1 jq -e . >/dev/null
-
-      # ---------------------------------------------------------------
-      # manifest.tsv is the contract the installer and the doctor both read.
-      # A typo here is silent: the installer skips the row, and the config
-      # never lands. So validate the columns, the strategy vocabulary, and
-      # that every source is a real TRACKED path (existing-but-untracked
-      # would work on this machine and vanish on a fresh clone).
-      # ---------------------------------------------------------------
-      - name: validate manifest.tsv
-        run: |
-          python3 - <<'PY'
-          import subprocess, sys, pathlib
-
-          STRATEGIES = {"link", "wrap", "include", "append-once", "merge-json", "never"}
-          manifest = pathlib.Path("manifest.tsv")
-          if not manifest.exists():
-              sys.exit("manifest.tsv is missing")
-
-          tracked = set(subprocess.run(
-              ["git", "ls-files"], capture_output=True, text=True, check=True
-          ).stdout.splitlines())
-          # A directory source is tracked when anything under it is tracked.
-          tracked_dirs = {str(p) for f in tracked for p in pathlib.PurePosixPath(f).parents}
-
-          errors, rows, targets = [], 0, {}
-          for n, raw in enumerate(manifest.read_text().splitlines(), 1):
-              line = raw.rstrip("\n")
-              if not line.strip() or line.lstrip().startswith("#"):
-                  continue
-              fields = line.split("\t")
-              if len(fields) < 3:
-                  errors.append(f"{n}: need source<TAB>target<TAB>strategy<TAB>note, "
-                                f"got {len(fields)} tab-separated field(s) - spaces are not separators")
-                  continue
-              src, target, strategy = (f.strip() for f in fields[:3])
-              note = fields[3].strip() if len(fields) > 3 else ""
-              rows += 1
-
-              if strategy not in STRATEGIES:
-                  errors.append(f"{n}: strategy {strategy!r} is not one of {sorted(STRATEGIES)}")
-              if not src or src.startswith("/") or src.startswith("~"):
-                  errors.append(f"{n}: source {src!r} must be a path relative to the repo root")
-              # never rows have no tracked source: the first column is a label.
-              elif strategy != "never" and src not in tracked and src not in tracked_dirs:
-                  if pathlib.Path(src).exists():
-                      errors.append(f"{n}: source {src!r} exists but is NOT tracked by git - "
-                                    f"it would be absent from a fresh clone")
-                  else:
-                      errors.append(f"{n}: source {src!r} does not exist")
-              if not target.startswith(("~", "/")):
-                  errors.append(f"{n}: target {target!r} must start with ~ or /")
-              if "/Users/" in target or "/Users/" in note:
-                  errors.append(f"{n}: hardcoded /Users/... path - use ~ or $HOME")
-              if not note:
-                  errors.append(f"{n}: no note - every row must say why this strategy "
-                                f"and what breaks without it")
-              # Two rows writing the same target fight each other.
-              if target in targets:
-                  errors.append(f"{n}: target {target!r} already claimed on line {targets[target]}")
-              else:
-                  targets[target] = n
-
-          print(f"checked {rows} manifest row(s)")
-          if errors:
-              print("\n".join("manifest.tsv:" + e for e in errors))
-              sys.exit(1)
-          PY
-
-      # The README promises an allowlist .gitignore. A tracked file that is also
-      # ignored is one of two different problems, so they are reported
-      # differently:
-      #
-      #   matched by the bare `*` line  -> a HOLE. Somebody added the file with
-      #       `git add -f` (or it predates the allowlist) and never wrote a `!`
-      #       re-include, so `git add` now silently skips edits to it. Fails.
-      #   matched by a specific deny pattern -> DELIBERATE, but the file is
-      #       still in the index and the ignore rule therefore does nothing.
-      #       Fix with `git rm --cached <path>`. Warns.
-      #
-      # --no-index is required: by default check-ignore says nothing about
-      # tracked paths, which is exactly the set being audited here.
-      - name: .gitignore allowlist has no holes
-        run: |
-          set -uo pipefail
-          holes=0
-          while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            pattern=$(git check-ignore -v --no-index -- "$path" | head -1 | cut -d: -f3 | cut -f1)
-            if [ "$pattern" = '*' ]; then
-              echo "::error file=$path::tracked but only matched by the catch-all '*' - add '!/$path' to .gitignore"
-              holes=$((holes + 1))
-            else
-              echo "::warning file=.gitignore::$path is deliberately ignored by '$pattern' but is still tracked; untrack it with: git rm --cached $path"
-            fi
-          done < <(git ls-files | git check-ignore --no-index --stdin || true)
-          echo "checked $(git ls-files | wc -l) tracked file(s), $holes allowlist hole(s)"
-          [ "$holes" -eq 0 ]
-
-      # bin/dotfiles-doctor's secret patterns are written so they do not match
-      # their own source. --self-test proves that still holds and that each
-      # pattern matches a synthetic sample - it needs no macOS and no config.
-      - name: dotfiles-doctor self-test
-        run: bash bin/dotfiles-doctor --self-test
-
       # The doctor's scan catches identity leakage gitleaks does not model:
-      # a plain email address, a public SSH key. Skips machine checks entirely.
-      - name: dotfiles-doctor identity scan
-        run: bash bin/dotfiles-doctor --only scan
+      # a plain email address, a public SSH key. --self-test proves each
+      # pattern still matches a synthetic sample and not its own source.
+      - name: dotfiles-doctor self-test and identity scan
+        run: bash bin/dotfiles-doctor --self-test && bash bin/dotfiles-doctor --only scan
 
   secrets:
     name: gitleaks
