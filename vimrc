@@ -3,14 +3,11 @@
 " which install.sh does. Nothing here hard-fails without them - a missing
 " package is simply not loaded and the g:ale_* / g:airline_* settings sit unread.
 
-set nocompatible
-
 filetype plugin indent on
-set cm=blowfish2
+packadd! comment " Vim's built-in gc / gcc / gcap commenting
 
 let mapleader = " "
 
-set backspace=indent,eol,start " Allows backspace on mac
 syntax on
 set shiftwidth=4 "proper shiftwidth
 set tabstop=4 " number of visual spaces per TAB
@@ -24,7 +21,7 @@ if executable('rg')
 endif
 set hlsearch " highlight matches
 set hidden
-set ignorecase "required: smartcase is a no-op on its own, so this was never live
+set ignorecase " smartcase needs it
 set smartcase "For ignoring lowercase when search except when uppercase
 " Try to put the indent level at the right place
 set smartindent
@@ -34,11 +31,9 @@ set viminfo='100,h,n~/.vim/viminfo
 " sets line number
 set nu
 set relativenumber
-set display+=lastline " Stops @@@ at end line for long lines
-set display+=truncate " Show @@@ only when line is truncated, not just at EOL
+set display=truncate " Show @@@ only when line is truncated, not just at EOL
 
 " Additive defaults (macOS-friendly)
-set mouse=                          " disable mouse — terminal owns selection/scroll
 set clipboard^=unnamed,unnamedplus
 
 " Netrw cosmetics
@@ -84,16 +79,14 @@ function! s:LoadTemplate(name) abort
   call cursor(1, 1)
 endfunction
 
-if has("autocmd")
-  augroup templates
-    autocmd!
-    autocmd BufNewFile *.cpp call <SID>LoadTemplate('skeleton.cpp')
-    autocmd BufNewFile *.rmd call <SID>LoadTemplate('skeleton.rmd')
-    autocmd BufNewFile *.rkt call <SID>LoadTemplate('skeleton.rkt')
-    autocmd BufNewFile *.c   call <SID>LoadTemplate('skeleton.c')
-    autocmd BufNewFile *.tex call <SID>LoadTemplate('skeleton.tex')
-  augroup END
-endif
+augroup templates
+  autocmd!
+  autocmd BufNewFile *.cpp call <SID>LoadTemplate('skeleton.cpp')
+  autocmd BufNewFile *.rmd call <SID>LoadTemplate('skeleton.rmd')
+  autocmd BufNewFile *.rkt call <SID>LoadTemplate('skeleton.rkt')
+  autocmd BufNewFile *.c   call <SID>LoadTemplate('skeleton.c')
+  autocmd BufNewFile *.tex call <SID>LoadTemplate('skeleton.tex')
+augroup END
 
 
 nnoremap QQ :q!<CR>
@@ -106,38 +99,26 @@ nnoremap clr ggdG
 nnoremap spc mtO<esc>jo<esc>`t
 nnoremap call ggVG
 
-" ALE settings (replaces syntastic; async). Inert without dense-analysis/ale —
+" ALE settings. Inert without dense-analysis/ale —
 " the variables just sit unread and SR reports an unknown command.
-let g:ale_lint_on_enter = 1
-let g:ale_lint_on_save = 1
 let g:ale_lint_on_text_changed = 'never'
-let g:ale_set_loclist = 1
-let g:ale_open_list = 0
 nnoremap SR :ALEReset<CR>
 
-" Airline (baseline — plugin was installed but unconfigured). Inert without
-" vim-airline; vim falls back to the built-in statusline.
-let g:airline#extensions#tabline#enabled = 0
-let g:airline_powerline_fonts = 0
+" Airline. Inert without vim-airline; vim falls back to the built-in statusline.
 let g:airline_section_z = '%l/%L  %p%%'
 
 nmap WW :w<CR>
 
-autocmd FileType python nnoremap <PageDown><PageDown> :w<CR>:!python3 %<CR>
+autocmd FileType python nnoremap <PageDown><PageDown> :w<CR>:!uv run %<CR>
 autocmd FileType cpp nnoremap <PageDown><PageDown> :w<CR>:!g++ %:S -o a.out && ./a.out; rm -f a.out<CR>
 autocmd FileType c   nnoremap <PageDown><PageDown> :w<CR>:!gcc %:S -o a.out && ./a.out; rm -f a.out<CR>
 autocmd FileType markdown nnoremap <PageDown><PageDown> :w<CR>:!pandoc -f markdown -t latex -s -o %.pdf %<CR><CR>
 autocmd Filetype markdown nnoremap <PageUp><PageUp> :put<space>=expand('%:p')<CR>A.pdf<esc>Iopen<space><esc>:.w<space>!bash<CR>
 autocmd Filetype rmd nnoremap <PageDown><PageDown> :w<CR>:!echo<space>"require(rmarkdown);<space>render('<c-r>%')"<space>\|<space>R<space>--vanilla<CR>
 autocmd Filetype rmd nnoremap <PageUp><PageUp> :put<space>=expand('%:p')<CR>A<esc>F.C.pdf<esc>Iopen<space><esc>:.w<space>!bash<CR>
-" PagueUp replacement: :! xdg-open %:r.pdf &<CR>
 
-autocmd FileType python inoremap rip input("s")<esc>Fss
-
-" autocmd Filetype tex nnoremap <PageUp><PageUp> :!basename % .tex|awk '{print $1".pdf"}'|xargs xdg-open
 autocmd Filetype tex      nnoremap <PageUp><PageUp> :put<space>=expand('%:p')<CR>A<esc>F.C.pdf<esc>Iopen<space><esc>:.w<space>!bash<CR><CR>dd
 autocmd Filetype plaintex nnoremap <PageUp><PageUp> :put<space>=expand('%:p')<CR>A<esc>F.C.pdf<esc>Iopen<space><esc>:.w<space>!bash<CR><CR>dd
-" ^^^^ haven't figured out yet. Opens the pdf file of current thingy
 
 augroup tex_maps
   autocmd!
@@ -164,12 +145,10 @@ autocmd FileType rmd inoremap <C-S-l> $$<esc>i
 
 nnoremap ;th :ThesaurusQueryReplaceCurrentWord<CR>
 
-" Spellcheck prose only. This was a global 'set spell', which flags identifiers,
-" CSS classes and log strings in every code buffer.
+" Spellcheck prose only; in code buffers it flags identifiers and log strings.
 augroup prose_spell
   autocmd!
   autocmd FileType markdown,rmd,tex,plaintex,gitcommit,text setlocal spell
 augroup END
 hi clear SpellBad
 hi SpellBad cterm=underline
-set wildmenu " visual autocomplete for command menu

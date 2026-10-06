@@ -150,15 +150,12 @@ Facts worth knowing before you debug something that is not broken:
 
 ## 6. Editors
 
-**vim** wants nine plugins, loaded as native packages from
-`~/.vim/pack/bundle/start/` (`:help packages`) — no plugin manager. A machine
-without them still gets a working vim, but every plugin-backed feature is
-silently inert, which is a worse failure to diagnose than an error would be.
-Plugins are third-party checkouts and deliberately not vendored; `vim/plugins.txt`
-lists the nine, each annotated with the vimrc setting or mapping it backs, and
-carries the clone commands in its header. `install.sh` clones them;
-`dotfiles-doctor` reports any that are missing, and warns on a leftover
-pre-native-packages `~/.vim/bundle`.
+**vim** loads the plugins listed in `vim/plugins.txt` as native packages from
+`~/.vim/pack/bundle/start/` (`:help packages`), with no plugin manager. Without
+them vim still works, but every plugin-backed feature is silently inert, which is
+harder to diagnose than an error. `install.sh` clones them; `dotfiles-doctor`
+reports any that are missing and warns on a leftover pre-native-packages
+`~/.vim/bundle`.
 
 ## 7. Troubleshooting
 
@@ -167,7 +164,7 @@ pre-native-packages `~/.vim/bundle`.
 | `ls` or `cat` fails in every shell | they are aliased to `eza`/`bat`; the alias needs the tool | `brew bundle --file=Brewfile`. The aliases are defined only when the binary exists, so a stale `~/.zshrc` predating that guard is the other possibility — re-run `./install.sh` |
 | A command using `eza` hangs forever, with no output | eza ≥0.23 reads **stdin** for paths when stdout is not a TTY and never returns if given no path argument. Agent, CI, and `$(…)` shells hit this | the guard lives in `~/.zshenv`, which every zsh reads — `.zshrc` is interactive-only and cannot fix it. Verify `~/.zshenv` is installed |
 | `eza --icons .` → `invalid value '.' for '--icons [<WHEN>]'` | `--icons` takes an *optional* value in eza ≥0.23, so it swallows the next argument | spell the value — `--icons=auto`, which also correctly drops icons when piped — or terminate flags with `-- .`. The tracked `ls`/`la`/`ll`/`lt` aliases and the `~/.zshenv` guard use these respectively; a bare `--icons` anywhere is the bug |
-| vim opens fine but `gc`, `;th`, `:Tabularize`, ALE, and airline do nothing | the plugins are not in `~/.vim/pack/bundle/start/` — not cloned, or still in the old pathogen `~/.vim/bundle` location, which native-package vim never reads | see step 6; `dotfiles-doctor` names the missing ones and flags a leftover `~/.vim/bundle` |
+| vim opens fine but `;th`, `:Tabularize`, ALE, and airline do nothing | the plugins are not in `~/.vim/pack/bundle/start/` — not cloned, or still in the old pathogen `~/.vim/bundle` location, which native-package vim never reads | see step 6 |
 | Every `git diff` / `git show` / `git add -p` errors | `core.pager = delta` and `delta` is not installed | `brew install git-delta` |
 | Every commit fails with a signing error | your `~/.gitconfig.local` sets `commit.gpgsign = true` but the signer or key is unavailable on this machine | fix the signer path and key in `~/.gitconfig.local`, or unset `commit.gpgsign` there |
 | Claude Code status line shows the directory but no model, context, or rate limits | `~/.claude/statusline.sh` reads its JSON stdin with `jq`, so without `jq` only the git-derived parts render | `brew install jq` (it is in `Brewfile`) |
