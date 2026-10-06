@@ -54,11 +54,15 @@ agents/SKILLS.md	~/.claude/skills/README.md	link	Relative symlink ../../.agents/
 agents/SKILLS.md	~/.codex/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
 agents/skills/agentish-to-english	~/.agents/skills/agentish-to-english	link	Personal skill: translate agent-generated prose into plain, direct English.
 agents/skills/anti-slop	~/.agents/skills/anti-slop	link	Personal skill: keep agent-authored code changes minimal, idiomatic, and within scope.
-agents/skills/autopush	~/.agents/skills/autopush	link	Personal skill: stage selectively, commit, push, refresh the PR body. Commit signing is whatever the machine configures in ~/.gitconfig.local; this repo does not set it.
+agents/skills/autopush	~/.agents/skills/autopush	link	Personal skill: stage selectively, commit, push, refresh the PR body.
 agents/skills/memdump	~/.agents/skills/memdump	link	Personal skill: checkpoint session context to a memory file before a context wipe.
 agents/skills/memload	~/.agents/skills/memload	link	Personal skill: reload a memory file and re-verify it against the codebase.
 agents/skills/orchestration-v2	~/.agents/skills/orchestration-v2	link	Personal skill: run Orca multi-agent work through the orcw wrapper (bin/orcw) instead of the raw orchestration CLI. Inert without ~/bin/orcw and a running Orca app; the vendored orchestration skill stays for the commands orcw does not wrap.
-agents/skills/pr_update	~/.agents/skills/pr_update	link	Personal skill: propose a PR description update via gh, never write without approval. Needs the gh CLI authenticated.
+agents/skills/pr-update	~/.agents/skills/pr-update	link	Personal skill: propose a PR description update via gh, never write without approval. Needs the gh CLI authenticated.
+agents/skills/code-grounded-explainer	~/.agents/skills/code-grounded-explainer	link	Personal skill: explain unfamiliar code or designs with concrete examples and diagrams, validated with bin/mermaid-check when it is installed.
+agents/skills/design-decisions	~/.agents/skills/design-decisions	link	Personal skill: compare open design options by effort, reversibility, and tradeoffs, and recommend one.
+agents/skills/incident-advisor	~/.agents/skills/incident-advisor	link	Personal skill: investigate an incident thread read-only and draft an evidence-backed contribution.
+agents/skills/technical-meeting-brief	~/.agents/skills/technical-meeting-brief	link	Personal skill: prep for a technical meeting, or recap its decisions and open questions.
 agents/skills/brainstorming	~/.agents/skills/brainstorming	link	Forked from superpowers 6.2.0: explore intent, requirements, and design before creative work. Its optional visual companion (scripts/server.cjs) needs node on PATH and silently no-ops without it.
 agents/skills/systematic-debugging	~/.agents/skills/systematic-debugging	link	Forked from superpowers 6.2.0: root-cause debugging process before proposing fixes.
 agents/skills/verification-before-completion	~/.agents/skills/verification-before-completion	link	Forked from superpowers 6.2.0: run verification and confirm output before claiming done.

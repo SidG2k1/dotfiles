@@ -2,6 +2,7 @@
 name: memdump
 description: Dump working context, learnings, open questions, and pointers to a memory file so a future session can resume the project. Use when the user invokes /memdump or asks to checkpoint before context is wiped.
 argument-hint: [memory-file-path]
+disable-model-invocation: true
 ---
 
 Checkpoint the current project state into the memory file path supplied by the user. If no path was supplied, ask for one before writing.
