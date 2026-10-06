@@ -1,11 +1,8 @@
 # ~/.config/yt-dlp/config
 
---retries 10
 --retry-sleep exp=1:120
---fragment-retries 10
 --socket-timeout 30
 -N 4
--c
 --embed-metadata
 --embed-thumbnail
 --embed-chapters

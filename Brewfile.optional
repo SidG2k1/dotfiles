@@ -16,9 +16,8 @@ brew "k9s"
 # `rclone config`; the alias is a command-not-found without the binary.
 brew "rclone"
 
-# Unlocks config/yt-dlp/config - the retry, embed-metadata, SponsorBlock, and
-# h264/1080p format-sort defaults - plus the yt-dlp wrapper function in zshrc.
-# That config is inert without the binary.
+# Unlocks config/yt-dlp/config - the retry backoff, embed-metadata, SponsorBlock,
+# and h264/1080p format-sort defaults. That config is inert without the binary.
 brew "yt-dlp"
 
 # Not optional *for* yt-dlp: the tracked config sets --merge-output-format,
@@ -44,12 +43,6 @@ brew "gnupg"
 # engine that is not there. Note vimrc's tex <PageDown><PageDown> mapping calls
 # xelatex, which tectonic does not provide.
 brew "tectonic"
-
-# Unlocks persistent sessions and pane layouts that survive a terminal restart.
-# Ghostty's window-save-state restores geometry, tabs, and working directories
-# but not running processes or scrollback; tmux covers that gap. No tracked
-# tmux.conf yet, so this is stock tmux.
-brew "tmux"
 
 # The two GUI apps whose configs this repo does install: config/ghostty/config.ghostty
 # (append-once into ~/.config/ghostty/config) and config/vscode/settings.json

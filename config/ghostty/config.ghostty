@@ -1,58 +1,34 @@
-# Functional settings only, and that is load-bearing rather than tidiness.
-# install.sh installs this file as a marker-delimited block APPENDED to
-# ~/.config/ghostty/config, and ghostty is last-wins - so any key set here
-# overrides the same key a machine set above the block. theme, font-size,
-# window-padding and background-opacity/blur used to live here and did exactly
-# that, replacing a machine's chosen theme on install. Per-machine appearance
-# belongs above the markers, or in a display-specific override; keep this file
-# to behaviour every machine should share.
+# Functional settings only. install.sh appends this file as a marker-delimited
+# block to ~/.config/ghostty/config, and Ghostty is last-wins, so any key set
+# here overrides the same key a machine set above the block. Per-machine
+# appearance belongs above the markers or in a display-specific override.
 
-# Nerd Font glyphs for lualine, oil, starship, and gitsigns.
+# Nerd Font glyphs for the starship prompt.
 font-family = "JetBrainsMono Nerd Font"
 
 # Keep more agent and build output available; allocation is lazy and per pane.
 scrollback-limit = 100000000
 
 # Restore window geometry, tabs, splits, and working directories after quitting.
-# Running processes and scrollback are not restored; use tmux for those if needed.
+# Running processes and scrollback are not restored.
 window-save-state = always
 
 # Option/Alt acts as Meta for word movement and terminal shortcuts in zsh and nvim.
 macos-option-as-alt = true
 
-# Prompt before a program reads the clipboard (this is also Ghostty's own default;
-# the previous value here, 'allow', was the deviation). 'allow' lets ANY process
-# running in the terminal - including one on the far side of an ssh session, or a
-# command pasted from a web page - read the clipboard silently, and the clipboard
-# routinely holds passwords and tokens. 'ask' costs one keypress on the rare
-# legitimate read. Writes stay unconfirmed: a program clobbering the clipboard is
-# an annoyance, not a disclosure.
+# Ghostty's default, kept so it overrides an 'allow' set above the block: 'allow'
+# lets any process in the terminal, including one over ssh, read the clipboard
+# silently, and the clipboard routinely holds passwords and tokens.
 clipboard-read = ask
-clipboard-write = allow
 
-# Preserve Ghostty's normal zsh integration and prepare interactive SSH sessions.
-# The SSH wrapper installs remote terminfo and falls back safely when it cannot.
-shell-integration-features = cursor,no-sudo,title,path,ssh-env,ssh-terminfo
-
-# Use the native scrollbar behavior selected in macOS settings.
-scrollbar = system
+# Prepare interactive SSH sessions: the wrapper installs remote terminfo and
+# falls back safely when it cannot.
+shell-integration-features = ssh-env,ssh-terminfo
 
 # Notify only when a command ran for at least 10 seconds and Ghostty is unfocused.
 notify-on-command-finish = unfocused
-notify-on-command-finish-action = bell,notify
+notify-on-command-finish-action = notify
 notify-on-command-finish-after = 10s
-
-# New tabs and splits inherit the current working directory. Nothing to set:
-# `working-directory = inherit` is the key that governs this and it is already the
-# default. tab-inherit-working-directory / split-inherit-working-directory used to
-# be set here; both also default to true, so the pair was pure redundancy and was
-# dropped. (Checked against Ghostty 1.3.1 with `ghostty +validate-config`, which
-# still accepts them — a key this file sets and Ghostty later removes becomes an
-# "unknown field" error at startup, so keys that only restate a default are worth
-# deleting rather than carrying.)
-
-# Treat common path and handle characters as part of a word when double-clicking.
-selection-word-chars = @-./_~
 
 # Open a fresh Ghostty window from anywhere in macOS.
 keybind = global:cmd+alt+g=new_window

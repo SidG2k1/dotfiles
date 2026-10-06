@@ -19,5 +19,6 @@
       "approveRequest": false,
       "approveResponse": true
     }
-  }
+  },
+  "gitlens.ai.model": "vscode"
 }
