@@ -32,21 +32,29 @@ outright; others are actively rewritten by the tool that reads them, or carry
 machine identity that a symlink would destroy. Picking the wrong strategy is how
 dotfiles repos silently eat a working machine's config.
 
-| Strategy | Mechanism | Use when |
-| --- | --- | --- |
-| `link` | symlink target → repo file | the repo owns the file outright and no tool writes to it (`vimrc`, `starship.toml`) |
-| `wrap` | target is a stub that sources the repo file, then `~/*.local` | the config needs a per-machine tail (`~/.zshrc`) |
-| `include` | repo file pulled in via the tool's own include directive; target stays user-owned | the target holds identity or tool-written blocks (`~/.gitconfig`, and its `[filter "lfs"]`) |
-| `append-once` | marker-delimited block (`# >>> dotfiles` … `# <<< dotfiles`), rewritten in place | the tool and the human both edit the same file (`~/.config/ghostty/config`) |
-| `merge-json` | `jq` merge of the tracked key subset | the app writes the file from its own UI (`~/.claude/settings.json`, VS Code, Docker) |
-| `never` | not installed; the note records who owns the target | another tool's installer owns it and regenerates it on upgrade (`~/.zprofile`, `~/.profile`) |
+| Strategy | Use when |
+| --- | --- |
+| `link` | no tool writes to the file (`vimrc`, `starship.toml`) |
+| `wrap` | the config needs a per-machine tail (`~/.zshrc`) |
+| `include` | the target holds identity or tool-written blocks (`~/.gitconfig`, and its `[filter "lfs"]`) |
+| `append-once` | the tool and the human both edit the same file (`~/.config/ghostty/config`) |
+| `merge-json` | the app writes the file from its own UI (`~/.claude/settings.json`, VS Code, Docker) |
+| `merge-toml` | an app owns the TOML file |
+| `never` | another tool's installer owns the target and regenerates it on upgrade (`~/.zprofile`, `~/.profile`) |
 
-**`manifest.tsv` is the single source of truth** for which file goes where, under
-which strategy, and what breaks if the strategy is wrong. This README does not
-duplicate that list — read the manifest. It also records what is deliberately
-*not* installed, and why.
+**`manifest.tsv` is the single source of truth.** Its header defines what each
+strategy does; its rows say which file goes where, under which strategy, what
+breaks if the strategy is wrong, and what is deliberately *not* installed.
 
 ## Machine-local layer
+
+Private configuration can live under gitignored `private/`. If
+`private/manifest.tsv` exists, the installer applies it after the public manifest;
+its source paths are relative to `private/`. `./install.sh --only private`
+installs that layer alone. Targets may overlap the public manifest for
+complementary `merge-json` or `merge-toml` subsets; other targets must be distinct.
+The doctor checks both manifests and optional executable names in
+`private/executables.txt`.
 
 Rule of thumb: **if a statement could be false on another machine, it goes in a
 `.local` file.** Machine truth is not portable config, and asserting it in a
@@ -63,8 +71,8 @@ Every seam is untracked, optional, and absent-safe.
 | `~/.gitconfig.local` | `[include]` in `~/.gitconfig` | identity: name, email, signing key |
 | `~/.ssh/config.local` | `Include` in your own `~/.ssh/config` | per-host blocks — real hostnames never enter this repo |
 | `~/.vim/after/plugin/zz-local.vim` | vim's `after/plugin` load path | per-box overrides that must win over plugin defaults |
-| `~/.agents/AGENTS.local.md` | agents read it alongside `~/.agents/AGENTS.md` | claims about *this* machine's toolchain |
-| `~/.agents/skills.local/<name>/SKILL.md` | symlinked into `~/.claude/skills/` and `~/.codex/skills/`, the same shape the tracked skills use | personal skills that name an internal host or a private service, so they cannot go in `agents/skills/` — see `~/.claude/skills/README.md` |
+| `~/.agents/AGENTS.local.md` | shared instructions explicitly ask agents to read it when present | private or machine-specific guidance; may link into `private/agents/` |
+| `~/.agents/skills.local/<name>/SKILL.md` | symlinked into both agent tools | private skills; the directory may link into `private/agents/skills/` — see `agents/SKILLS.md` |
 
 ```sh
 # ~/.zshrc.local

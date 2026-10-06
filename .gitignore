@@ -46,6 +46,7 @@
 !/Brewfile.optional
 !/install.sh
 !/lib/brew-dependencies.sh
+!/lib/merge-toml.py
 !/lib/orcw.py
 
 # ---- CI ----

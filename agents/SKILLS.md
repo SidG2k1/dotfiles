@@ -23,44 +23,30 @@ The only difference is whether the real content sits in the public dotfiles repo
 false on another machine.
 
 ```
-~/.agents/skills.local/<name>/SKILL.md                       # untracked, never committed
+~/dotfiles/private/agents/skills/<name>/SKILL.md              # ignored by the public repo
+~/.agents/skills.local -> ~/dotfiles/private/agents/skills
 ~/.claude/skills/<name>  -> ../../.agents/skills.local/<name>
 ~/.codex/skills/<name>   -> ../../.agents/skills.local/<name>
 ```
 
 `skills.local/` is a seam in the dotfiles machine-local layer alongside `~/.zshrc.local` and
-`~/.agents/AGENTS.local.md` — see **Machine-local layer** in `~/dotfiles/README.md`. Its test: *if a
-statement could be false on another machine, it goes in a `.local` file.* The naming carries the
-signal — a real directory under `skills.local/` is deliberate; a real directory under
-`~/.agents/skills/` or in a tool's skills dir is a mistake.
+`~/.agents/AGENTS.local.md` — see **Machine-local layer** in `~/dotfiles/README.md`. The naming
+carries the signal — a real directory under `skills.local/` is deliberate; a real directory under
+`~/.agents/skills/` or in a tool's skills dir is a mistake, except the vendored skills the skills CLI
+installs there (listed in `~/dotfiles/manifest.tsv` under *"NOT rows in this manifest, on purpose"*).
 
 ## Adding one
 
-```bash
-# local-only
-mkdir -p ~/.agents/skills.local/<name>            # author SKILL.md here
-ln -s ../../.agents/skills.local/<name> ~/.claude/skills/<name>
-ln -s ../../.agents/skills.local/<name> ~/.codex/skills/<name>
-
-# portable
-mkdir -p ~/dotfiles/agents/skills/<name>
-ln -s ~/dotfiles/agents/skills/<name> ~/.agents/skills/<name>
-ln -s ../../.agents/skills/<name> ~/.claude/skills/<name>
-ln -s ../../.agents/skills/<name> ~/.codex/skills/<name>
-```
-
-Both layers link every tool. Linking only one is what leaves a skill working in one harness and
-absent in the other — and Codex is the easy one to forget, because `~/.codex/skills/` also holds
-`.system/`, so it never looks empty.
-
-Portable takes two more steps, because dotfiles tracks by allowlist and installs by manifest:
-
-1. a `!/agents/skills/<name>/SKILL.md` line in `~/dotfiles/.gitignore` — without it `git add` refuses
-   and `git status` stays silent, so the skill is live here and backed up nowhere
-2. one row in `~/dotfiles/manifest.tsv` for the `~/.agents/skills/<name>` link; `install.sh` links
-   everything under `~/.agents/skills/` into both tool dirs itself
-
-Skip either and the skill works on this machine and vanishes on the next.
+1. Create `<name>/SKILL.md` under `~/dotfiles/agents/skills/` (portable) or
+   `~/dotfiles/private/agents/skills/` (local-only).
+2. Portable only: in `~/dotfiles/.gitignore`, add a `!/agents/skills/<name>/...` line for each tracked
+   file (`SKILL.md`, and `agents/openai.yaml` if the skill has one); in `~/dotfiles/manifest.tsv`, add
+   a row for the `~/.agents/skills/<name>` link. Without the `.gitignore` line, `git add` refuses and
+   `git status` stays silent. Skip either and the skill works on this machine but is missing on the
+   next. A local-only skill needs neither: the private manifest links the whole
+   `private/agents/skills/` directory to `~/.agents/skills.local`.
+3. Run `./install.sh --only agents` (portable) or `./install.sh --only private` (local-only) from
+   `~/dotfiles` to link the skill into `~/.claude/skills/` and `~/.codex/skills/`.
 
 Verify the paths land on one file rather than merely existing — a dangling link fails silently and the
 skill just never appears:
@@ -107,20 +93,10 @@ Leave it alone; personal skills go beside it, not inside it.
 **A skill missing from the model's list.** `disable-model-invocation: true` hides it from the listing
 the model sees while leaving `/<name>` working. Check frontmatter before debugging the link.
 
-**A skill in `~/dotfiles/agents/skills/` with no link anywhere.** Vendored third-party skills
-(`gh-stack`, `find-skills`) are updated by the skills CLI into `~/.agents/skills/`, and the tool dirs
-link to *those* live copies — never to the dotfiles snapshots, which exist only as seeds and can go
-stale. `~/dotfiles/manifest.tsv` names them under *"NOT rows in this manifest, on purpose"*.
+**Forks of the superpowers plugin.** The skills noted as *"Forked from superpowers 6.2.0"* in
+`~/dotfiles/manifest.tsv` were copied from github.com/obra/superpowers so the plugin's per-session
+SessionStart hook could be removed. Nothing updates them from upstream; they are maintained by hand.
 
-**Forks of the superpowers plugin.** `brainstorming`, `systematic-debugging`,
-`verification-before-completion`, `writing-plans`, `executing-plans`, `subagent-driven-development`,
-`dispatching-parallel-agents`, and `receiving-code-review` are forks of superpowers 6.2.0
-(github.com/obra/superpowers), extracted so the plugin's per-session SessionStart hook could go.
-They are ordinary tracked personal skills — cross-references to dropped plugin skills were rewritten,
-`subagent-driven-development` bundles its own `code-reviewer.md`, and nothing updates them from
-upstream; they're maintained by hand.
-
-**No off-machine copy of the local layer.** Accepted, not overlooked: the alternative puts internal
-hostnames in a repo on an external account, and a skill here is a few KB — quicker to re-author than to
-sync safely. `~/.agents/skills.local/` has local git history for undo. Do not add a remote without
-deciding that question again.
+**Private layer backup.** Gitignoring `private/` keeps it out of the public repository but does
+not back it up. Adding a remote for private content needs a separate decision about which host is
+approved; the public repo must never track that content.

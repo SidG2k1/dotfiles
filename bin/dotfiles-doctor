@@ -11,7 +11,7 @@
 #   dotfiles-doctor              full run
 #   dotfiles-doctor --strict     treat WARN as failure (use this in review)
 #   dotfiles-doctor --no-probe   skip runtime probes (they spawn zsh/eza)
-#   dotfiles-doctor --only NAME  run one section: install brew skills vim scan probe
+#   dotfiles-doctor --only NAME  run one section: install brew skills vim scan probe local
 #   dotfiles-doctor --self-test  prove the secret patterns still match samples
 #
 # Exit status: 0 when nothing FAILed, 1 otherwise. WARN never fails the run
@@ -80,7 +80,7 @@ BREW_DEPENDENCIES="$DOTFILES/lib/brew-dependencies.sh"
 BEGIN_MARK='# >>> dotfiles'
 END_MARK='# <<< dotfiles'
 
-STRATEGIES='link wrap include append-once merge-json never'
+STRATEGIES='link wrap include append-once merge-json merge-toml never'
 
 STRICT=0
 PROBE=1
@@ -202,6 +202,7 @@ first_sentence() {
 # ---------------------------------------------------------------------------
 
 check_install() {
+  local manifest_file=${1:-$MANIFEST} source_root=${2:-$DOTFILES}
   section "install strategies (manifest.tsv)"
 
   if [ ! -f "$MANIFEST" ]; then
@@ -217,7 +218,7 @@ check_install() {
       continue
     }
 
-    abs="$DOTFILES/$src"
+    abs="$source_root/$src"
     tgt=$(expand_target "$target")
 
     case " $STRATEGIES " in
@@ -350,6 +351,21 @@ EOF
         fi
         ;;
 
+      merge-toml)
+        local helper="$DOTFILES/lib/merge-toml.py" result=0
+        if command -v uv >/dev/null 2>&1; then
+          uv run --no-project --python '>=3.11' python "$helper" "$abs" "$tgt" --check || result=$?
+        else
+          row WARN "toml $target" "requires uv"
+          continue
+        fi
+        if [ "$result" -eq 0 ]; then
+          row PASS "toml $target" "tracked preferences from $src are present"
+        else
+          row FAIL "toml $target" "tracked preferences missing or TOML invalid"
+        fi
+        ;;
+
       never)
         # The check here is the inverse: prove we did NOT take the file over.
         if [ -L "$tgt" ]; then
@@ -366,7 +382,7 @@ EOF
         fi
         ;;
     esac
-  done <"$MANIFEST"
+  done <"$manifest_file"
 }
 
 # ---------------------------------------------------------------------------
@@ -439,7 +455,7 @@ check_skills() {
     [ -e "$HOME/.agents/skills/$s/SKILL.md" ] || row WARN "skill $s" "not installed in ~/.agents/skills"
   done
 
-  for a in "$HOME/.agents/skills"/*/SKILL.md; do
+  for a in "$HOME/.agents/skills"/*/SKILL.md "$HOME/.agents/skills.local"/*/SKILL.md; do
     [ -e "$a" ] || continue
     s=${a%/SKILL.md}; s=${s##*/}
     ra=$(resolve "$a" 2>/dev/null)
@@ -456,6 +472,23 @@ check_skills() {
     done
     [ "$bad" -eq 0 ] && row PASS "skill $s" "~/.agents, ~/.claude, ~/.codex -> ${ra#"$HOME"/}"
   done
+}
+
+# Optional machine-local executable names, one per line; no commands are evaluated.
+check_local() {
+  local file="$DOTFILES/private/executables.txt" tool
+  [ -f "$file" ] || return 0
+  section "private executables"
+  while IFS= read -r tool || [ -n "$tool" ]; do
+    case "$tool" in ''|'#'*) continue ;; esac
+    if [[ ! "$tool" =~ ^[a-zA-Z0-9._-]+$ ]]; then
+      row FAIL "private executable" "invalid name in $file"
+    elif command -v "$tool" >/dev/null 2>&1; then
+      row PASS "executable $tool" "$(command -v "$tool")"
+    else
+      row FAIL "executable $tool" "not found on PATH"
+    fi
+  done <"$file"
 }
 
 # ---------------------------------------------------------------------------
@@ -752,7 +785,7 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-SECTIONS='all install brew skills vim probe scan'
+SECTIONS='all install brew skills vim probe scan local'
 case " $SECTIONS " in
   *" $ONLY "*) ;;
   *)
@@ -767,11 +800,15 @@ if [ "$do_self_test" -eq 1 ]; then
   self_test
 else
   want install && check_install
+  if want install && [ -f "$DOTFILES/private/manifest.tsv" ]; then
+    check_install "$DOTFILES/private/manifest.tsv" "$DOTFILES/private"
+  fi
   want brew && check_brewfile
   want skills && check_skills
   want vim && check_vim
   want probe && [ "$PROBE" -eq 1 ] && check_probe
   want scan && check_scan
+  want local && check_local
 fi
 
 printf '\n%s%d pass  %d warn  %d fail  %d skip%s\n' \

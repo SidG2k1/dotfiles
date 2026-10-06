@@ -23,7 +23,11 @@ brew "bat"
 # model name; merge-json installs cannot run at all.
 brew "jq"
 
-# config/gh/config.yml is installed for it, and the autopush / pr_update agent
+# Runs the Python helpers and transcription runbook. The installer reuses an
+# existing uv on PATH when it is supplied outside Homebrew.
+brew "uv"
+
+# config/gh/config.yml is installed for it, and the autopush / pr-update agent
 # skills drive it (`gh pr edit`, `gh pr view`). Without it that config is inert
 # and both skills fail at their first command.
 brew "gh"

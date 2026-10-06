@@ -15,6 +15,8 @@
 #             append-once  idempotent marker-delimited block appended; the rest
 #                          of the target is left untouched
 #             merge-json   jq merge of the tracked key subset into existing JSON
+#             merge-toml   merge of tracked single-line top-level TOML keys into
+#                          the existing file (lib/merge-toml.py; requires uv)
 #             never        not installed by this repo; the note says who owns the
 #                          target and what overwriting it would break. The source
 #                          column is a label only - no repo copy exists, because
@@ -49,7 +51,7 @@ agents/AGENTS.md	~/.agents/AGENTS.md	link	Canonical shared instructions. Portabl
 agents/AGENTS.md	~/.claude/CLAUDE.md	link	Second symlink to the same file so Claude Code reads one source of truth. Point it at ~/.agents/AGENTS.md, not at $DOTFILES, so the repo can move.
 agents/AGENTS.md	~/.codex/AGENTS.md	link	Third symlink to the same file for Codex. Same indirection through ~/.agents/AGENTS.md.
 agents/AGENTS.md	~/.config/opencode/AGENTS.md	link	Fourth symlink to the same file for OpenCode: its global instructions path is fixed at ~/.config/opencode/AGENTS.md and it follows neither CLAUDE.md nor ~/.agents/AGENTS.md. Same indirection through ~/.agents/AGENTS.md.
-agents/SKILLS.md	~/.agents/SKILLS.md	link	Skills-system design doc: the two layers, the link recipes, and the frontmatter keys each tool honors. Absolute link, same shape as the skills themselves.
+agents/SKILLS.md	~/.agents/SKILLS.md	link	Skills-system design doc: the two layers, how to add a skill, and the frontmatter keys each tool honors. Absolute link, same shape as the skills themselves.
 agents/SKILLS.md	~/.claude/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
 agents/SKILLS.md	~/.codex/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
 agents/skills/agentish-to-english	~/.agents/skills/agentish-to-english	link	Personal skill: translate agent-generated prose into plain, direct English.

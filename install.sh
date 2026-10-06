@@ -60,7 +60,7 @@ SKIP_BREW=0
 SKIP_VIM_PLUGINS=0
 ONLY=""
 
-VALID_GROUPS="dirs brew shell vim terminal git agents tools scripts never vim-plugins"
+VALID_GROUPS="dirs brew shell vim terminal git agents tools scripts private never vim-plugins"
 
 # ------------------------------------------------------------------- plumbing
 
@@ -123,6 +123,7 @@ vim-plugins are phases of this script with no manifest rows of their own:
                ~/.agents/skills linked into ~/.claude and ~/.codex, the
                gh-stack gh extension
   tools        gh, VS Code, yt-dlp, gnupg, docker
+  private      optional private/manifest.tsv; credentials and caches stay app-owned
   scripts      ~/bin helpers
   never        print the rows this repo deliberately does not install, and why
   brew         Homebrew bundle only
@@ -668,6 +669,31 @@ do_merge_json() {
 	changed "$(display_path "$tgt") tracked keys merged"
 }
 
+do_merge_toml() {
+	local src_abs="$1" tgt="$2" desired
+	local helper="$DOTFILES/lib/merge-toml.py"
+	ensure_parent "$tgt" || return 0
+	detach_repo_symlink "$tgt"
+	desired="$(tmpfile)"
+	if command -v uv >/dev/null 2>&1; then
+		if ! uv run --no-project --python '>=3.11' python "$helper" "$src_abs" "$tgt" >"$desired"; then
+			fail "TOML merge failed for $(display_path "$tgt")"; return 0
+		fi
+	else
+		fail "merge-toml requires uv"; return 0
+	fi
+	if [ -f "$tgt" ] && cmp -s "$desired" "$tgt"; then
+		ok "$(display_path "$tgt") tracked TOML preferences already merged"; return 0
+	fi
+	if [ -f "$tgt" ]; then backup_copy "$tgt"; fi
+	if [ "$DRY_RUN" -eq 1 ]; then
+		plan "merge tracked TOML preferences into $(display_path "$tgt")"
+	else
+		install_content "$desired" "$tgt"
+		changed "$(display_path "$tgt") tracked TOML preferences merged"
+	fi
+}
+
 do_never() {
 	local tgt="$1" note_text="$2"
 	skipped "$(display_path "$tgt") - not installed by this repo"
@@ -754,16 +780,20 @@ phase_brew() {
 
 phase_manifest() {
 	heading "manifest"
-	local group="general" src tgt strat note_text src_abs
+	local manifest_file=${1:-$MANIFEST} source_root=${2:-$DOTFILES}
+	local group=${3:-general} src tgt strat note_text src_abs
 
 	# Read the manifest on fd 3 so nothing inside the loop (git, curl, brew, jq)
 	# can swallow the rest of the file by reading stdin.
 	while IFS=$'\t' read -r src tgt strat note_text <&3 || [ -n "${src:-}" ]; do
-		# Section headers are the group names used by --only.
+		# Section headers are the group names used by --only. A layer given a
+		# group (the private manifest) is one group, so its headers are cosmetic.
 		case "$src" in
 			'# ---- '*' ----'*)
-				group="${src#\# ---- }"
-				group="${group%% ----*}"
+				if [ -z "${3:-}" ]; then
+					group="${src#\# ---- }"
+					group="${group%% ----*}"
+				fi
 				continue
 				;;
 			''|'#'*) continue ;;
@@ -772,7 +802,8 @@ phase_manifest() {
 		want_group "$group" || continue
 
 		tgt="$(expand_target "$tgt")"
-		src_abs="$DOTFILES/$src"
+		src_abs="$source_root/$src"
+		case "$src" in /*|../*|*/../*|*/..) fail "manifest source must stay inside its layer: $src"; continue ;; esac
 
 		case "$strat" in
 			never)
@@ -793,12 +824,13 @@ phase_manifest() {
 			include) do_include "$src_abs" "$tgt" ;;
 			append-once) do_append_once "$src_abs" "$tgt" ;;
 			merge-json) do_merge_json "$src_abs" "$tgt" ;;
+			merge-toml) do_merge_toml "$src_abs" "$tgt" ;;
 			*)
 				fail "unknown strategy '$strat' for $src -> $(display_path "$tgt")" \
-					"Valid strategies: link, wrap, include, append-once, merge-json, never."
+					"Valid strategies: link, wrap, include, append-once, merge-json, merge-toml, never."
 				;;
 		esac
-	done 3<"$MANIFEST"
+	done 3<"$manifest_file"
 	return 0
 }
 
@@ -856,6 +888,28 @@ phase_vim_plugins() {
 # drives (the skill is inert without it).
 VENDORED_SKILLS="github/gh-stack@gh-stack vercel-labs/skills@find-skills"
 
+link_agent_skills() { # link_agent_skills <layer>... - dirs under ~/.agents
+	local layer dir name tool target
+	# Relative links, so ~/.agents and both tool dirs resolve to one SKILL.md.
+	for layer in "$@"; do
+		for dir in "$HOME/.agents/$layer"/*/; do
+			[ -d "$dir" ] || continue
+			name="$(basename -- "$dir")"
+			for tool in claude codex; do
+				target="$HOME/.$tool/skills/$name"
+				if [ -e "$target" ] || [ -L "$target" ]; then
+					ok "$(display_path "$target")"
+				elif [ "$DRY_RUN" -eq 1 ]; then
+					plan "ln -s ../../.agents/$layer/$name $(display_path "$target")"
+				else
+					ln -s "../../.agents/$layer/$name" "$target"
+					changed "$(display_path "$target") -> ../../.agents/$layer/$name"
+				fi
+			done
+		done
+	done
+}
+
 phase_agent_extras() {
 	heading "agent skills + gh extension"
 	local spec name dir tool target
@@ -876,22 +930,7 @@ phase_agent_extras() {
 		fi
 	done
 
-	# Relative links, so ~/.agents and both tool dirs resolve to one SKILL.md.
-	for dir in "$HOME/.agents/skills"/*/; do
-		[ -d "$dir" ] || continue
-		name="$(basename -- "$dir")"
-		for tool in claude codex; do
-			target="$HOME/.$tool/skills/$name"
-			if [ -e "$target" ] || [ -L "$target" ]; then
-				ok "$(display_path "$target")"
-			elif [ "$DRY_RUN" -eq 1 ]; then
-				plan "ln -s ../../.agents/skills/$name $(display_path "$target")"
-			else
-				ln -s "../../.agents/skills/$name" "$target"
-				changed "$(display_path "$target") -> ../../.agents/skills/$name"
-			fi
-		done
-	done
+	link_agent_skills skills skills.local
 
 	if ! command -v gh >/dev/null 2>&1; then
 		warn "gh not found; skipping the gh-stack extension"
@@ -932,6 +971,11 @@ elif want_group brew; then
 fi
 
 phase_manifest
+
+if want_group private && [ -f "$DOTFILES/private/manifest.tsv" ]; then
+	phase_manifest "$DOTFILES/private/manifest.tsv" "$DOTFILES/private" private
+	if [ "$ONLY" = private ]; then link_agent_skills skills.local; fi
+fi
 
 if want_group agents; then
 	phase_agent_extras
