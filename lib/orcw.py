@@ -18,22 +18,19 @@ Design:
   * Output is compact text by default, projected JSON with --json, untouched
     Orca output with --raw.
 
-Exit codes: 0 ok (a `wait` with no messages is ok), 1 Orca error, 2 orcw
-refused (unanswered question on `done`, unresolved placeholder, settled
-dispatch on `w done`), 3 doctor found a missing command or flag.
-
-Written against Orca 1.4.194, verified on 1.4.196. Standard library only;
-Python >= 3.9.
+Exit codes and verified Orca versions: `orcw --help`, `orcw doctor`.
 """
 from __future__ import annotations
 
 import argparse
+import fcntl
 import glob
 import json
 import os
 import platform
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import threading
@@ -42,8 +39,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Optional
 
-PINNED = "1.4.194"
-VERIFIED = {"1.4.194", "1.4.196"}
+VERIFIED = {"1.4.194", "1.4.196", "1.4.218"}
 EXIT_OK, EXIT_ORCA, EXIT_REFUSED, EXIT_DOCTOR = 0, 1, 2, 3
 WAIT_TYPES = "worker_done,escalation,question"
 BODY_LIMIT = 1500
@@ -59,10 +55,9 @@ def home() -> Path:
 
 def orcw_cmd() -> str:
     """How a worker should invoke orcw: $ORCW_CMD, else bare name if on PATH, else this clone's launcher."""
-    from shutil import which
     if os.environ.get("ORCW_CMD"):
         return os.environ["ORCW_CMD"]
-    if which("orcw"):
+    if shutil.which("orcw"):
         return "orcw"
     launcher = Path(__file__).resolve().parent.parent / "bin" / "orcw"
     return str(launcher) if launcher.exists() else "orcw"
@@ -178,23 +173,19 @@ def orca(*args: Any, timeout: Optional[float] = None, allow_fail: bool = False,
                 reader.start()
             try:
                 child.wait(timeout=timeout)
-            except subprocess.TimeoutExpired as exc:
+            except (subprocess.TimeoutExpired, KeyboardInterrupt) as exc:
                 child.terminate()
                 try:
                     child.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     child.kill()
                     child.wait()
-                exc.stdout = "".join(stdout)
-                exc.stderr = "".join(stderr)
-                raise
-            except KeyboardInterrupt:
-                child.terminate()
-                try:
-                    child.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    child.kill()
-                    child.wait()
+                if isinstance(exc, subprocess.TimeoutExpired):
+                    # Join first: the pipes can hold output the readers have not drained yet.
+                    for reader in readers:
+                        reader.join()
+                    exc.stdout = "".join(stdout)
+                    exc.stderr = "".join(stderr)
                 raise
             finally:
                 for reader in readers:
@@ -677,9 +668,8 @@ USED: Dict[str, Dict[str, List[str]]] = {
         "worker-read": ["--dispatch", "--limit"],
         "worker-list": ["--run"],
         "worker-release": ["--dispatch"],
-        "dispatch": ["--task", "--to", "--inject", "--run"],
         "dispatch-show": ["--task"],
-        "check": ["--wait", "--types", "--timeout-ms", "--ack", "--unread", "--peek", "--run"],
+        "check": ["--wait", "--types", "--timeout-ms", "--ack", "--unread", "--run"],
         "send": ["--to", "--subject", "--body", "--type", "--task-id", "--dispatch-id", "--outcome", "--files-modified"],
         "reply": ["--id", "--body"],
         "ask": ["--question", "--options", "--timeout-ms", "--resume"],
@@ -1065,9 +1055,21 @@ def cmd_tell(ns: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def worker_rows(run: str) -> List[Dict[str, Any]]:
+    # 1.4.218+ pages worker-list at 100 rows; older Orcas return everything at once.
+    args = ["orchestration", "worker-list", "--run", run]
+    rows: List[Dict[str, Any]] = []
+    cursor = None
+    while True:
+        res = result(orca(*args, *(["--cursor", cursor] if cursor else [])))
+        rows += res.get("workers") or []
+        cursor = get(res, "page.nextCursor")
+        if not cursor:
+            return rows
+
+
 def live_workers(run: str) -> List[Dict[str, Any]]:
-    res = result(orca("orchestration", "worker-list", "--run", run))
-    return [w for w in res.get("workers") or [] if w.get("dispatchStatus") not in SETTLED]
+    return [w for w in worker_rows(run) if w.get("dispatchStatus") not in SETTLED]
 
 
 def agent_wait(dispatch: str) -> Any:
@@ -1116,7 +1118,7 @@ def settle_delivery(ns: argparse.Namespace, run: str, data: Dict[str, Any], deli
         state = str(rel["state"] or "released")
         reason = rel["reason"]
         if state == "retained":
-            for w in result(orca("orchestration", "worker-list", "--run", run)).get("workers") or []:
+            for w in worker_rows(run):
                 if w.get("dispatchId") == dispatch:
                     reason = get(w, "resource.retainedReason") or reason
         actions.append({"task": task_id, "action": "released", "state": state, "reason": reason})
@@ -1149,8 +1151,6 @@ def all_settled(run: str, data: Dict[str, Any]) -> bool:
 
 
 def cmd_wait(ns: argparse.Namespace) -> int:
-    import fcntl
-
     run = require_run(ns)
     ns.run = run
     path = home() / "runs" / run / "wait.lock"
@@ -1172,6 +1172,23 @@ def cmd_wait(ns: argparse.Namespace) -> int:
         return wait_once(ns)
     finally:
         lock.close()
+
+
+def record_delivery(run: str, data: Dict[str, Any], delivery: str, messages: List[Dict[str, Any]],
+                    full: bool) -> List[str]:
+    """Render messages, record finished tasks and open questions, and save the unacked delivery."""
+    lines: List[str] = []
+    for msg in messages:
+        lines += message_lines(run, msg, full)
+        mv = message_view(msg)
+        if mv["type"] == "worker_done" and not mv["rejected"] and mv["task"] in data["tasks"]:
+            data["tasks"][mv["task"]]["status"] = mv["outcome"] or "completed"
+        if mv["type"] == "question" and mv["id"] not in data["replied"]:
+            data["questions"][mv["id"]] = mv["task"] or mv["from"]
+    data["delivery"] = delivery
+    save_run(data)
+    log_event("delivery", {"delivery": delivery, "messages": [message_view(m) for m in messages]})
+    return lines
 
 
 def auto_wait(ns: argparse.Namespace) -> int:
@@ -1208,17 +1225,8 @@ def auto_wait(ns: argparse.Namespace) -> int:
                   f"Inspect with `orcw resume`")
             return EXIT_ORCA
         print(f"deliv  {delivery}  {len(messages)} message(s)")
-        for msg in messages:
-            for line in message_lines(run, msg, ns.full):
-                print(line)
-            mv = message_view(msg)
-            if mv["type"] == "worker_done" and not mv["rejected"] and mv["task"] in data["tasks"]:
-                data["tasks"][mv["task"]]["status"] = mv["outcome"] or "completed"
-            if mv["type"] == "question" and mv["id"] not in data["replied"]:
-                data["questions"][mv["id"]] = mv["task"] or mv["from"]
-        data["delivery"] = delivery
-        save_run(data)
-        log_event("delivery", {"delivery": delivery, "messages": [message_view(m) for m in messages]})
+        for line in record_delivery(run, data, delivery, messages, ns.full):
+            print(line)
         qs = open_questions(data, messages)
         if qs:
             print(f"stop   {len(qs)} question(s) need you: " + ", ".join(qs))
@@ -1254,16 +1262,7 @@ def wait_once(ns: argparse.Namespace) -> int:
         emit(ns, view, docs, lines)
         return EXIT_OK
     lines.append(f"deliv  {view['delivery']}  {len(messages)} message(s); `orcw done {view['delivery']}` after handling all")
-    for msg in messages:
-        lines += message_lines(run, msg, ns.full)
-        mv = message_view(msg)
-        if mv["type"] == "worker_done" and not mv["rejected"] and mv["task"] in data["tasks"]:
-            data["tasks"][mv["task"]]["status"] = mv["outcome"] or "completed"
-        if mv["type"] == "question" and mv["id"] not in data["replied"]:
-            data["questions"][mv["id"]] = mv["task"] or mv["from"]
-    data["delivery"] = view["delivery"]
-    save_run(data)
-    log_event("delivery", {"delivery": view["delivery"], "messages": view["messages"]})
+    lines += record_delivery(run, data, view["delivery"], messages, ns.full)
     lines += launch_deferred(ns, run, data)
     emit(ns, view, docs, lines)
     return EXIT_OK
@@ -1379,8 +1378,9 @@ def cmd_read(ns: argparse.Namespace) -> int:
 
 
 def rebuild(run: str, data: Dict[str, Any]) -> Dict[str, Any]:
-    workers = {w.get("taskId"): w for w in result(orca("orchestration", "worker-list", "--run", run)).get("workers") or []}
+    workers = {w.get("taskId"): w for w in worker_rows(run)}
     terms = {t.get("handle"): t for t in result(orca("terminal", "list")).get("terminals") or []}
+    worktrees: Optional[Dict[str, Any]] = None
     for row in task_rows(run):
         task_id = row.get("id")
         rec = data["tasks"].setdefault(task_id, {})
@@ -1392,11 +1392,20 @@ def rebuild(run: str, data: Dict[str, Any]) -> Dict[str, Any]:
             rec["handle"] = w.get("agentTerminalHandle") or rec.get("handle")
             rec["supervised"] = w.get("workerState") != "unsupervised"
             rec["terminal_state"] = w.get("terminalState")
+            rec["worktree"] = get(w, "resource.worktreeId") or rec.get("worktree")
         t = terms.get(rec.get("handle"))
         if t:
             rec["path"] = t.get("worktreePath") or rec.get("path")
             rec["worktree"] = t.get("worktreeId") or rec.get("worktree")
             rec["branch"] = strip_ref(t.get("branch")) or rec.get("branch")
+        elif rec.get("worktree") and not rec.get("path"):
+            # 1.4.218+ workers can run without a terminal; take placement from the worktree instead.
+            if worktrees is None:
+                worktrees = {wt.get("id"): wt for wt in result(orca("worktree", "list")).get("worktrees") or []}
+            wt = worktrees.get(rec["worktree"])
+            if wt:
+                rec["path"] = wt.get("path")
+                rec["branch"] = strip_ref(wt.get("branch")) or rec.get("branch")
     save_run(data)
     return data
 
@@ -1404,7 +1413,7 @@ def rebuild(run: str, data: Dict[str, Any]) -> Dict[str, Any]:
 def status_rows(run: str, data: Dict[str, Any], with_git: bool = True) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     try:
-        workers = result(orca("orchestration", "worker-list", "--run", run)).get("workers") or []
+        workers = worker_rows(run)
     except OrcaError:
         workers = []
     retained = [w for w in workers if get(w, "resource.retainedReason") == "user_takeover"]
@@ -1414,8 +1423,10 @@ def status_rows(run: str, data: Dict[str, Any], with_git: bool = True) -> List[D
     if retained:
         try:
             active_terms = {t.get("handle") for t in result(orca("terminal", "list")).get("terminals") or []}
-            active_worktrees = {w.get("id") for w in result(orca("worktree", "list")).get("worktrees") or []}
-            inventories_ok = True
+            wl = result(orca("worktree", "list"))
+            active_worktrees = {w.get("id") for w in wl.get("worktrees") or []}
+            # A truncated page cannot prove a worktree is gone.
+            inventories_ok = not wl.get("truncated")
         except OrcaError:
             pass
     for worker in workers:
@@ -1444,7 +1455,7 @@ def status_rows(run: str, data: Dict[str, Any], with_git: bool = True) -> List[D
             ahead = git(path, "rev-list", "--count", "@{u}..HEAD")
             if not ahead.isdigit() and rec.get("branch"):
                 ahead = git(path, "rev-list", "--count", f"origin/{rec['branch']}..HEAD")
-            if rec.get("branch") and shutil_which("gh"):
+            if rec.get("branch") and shutil.which("gh"):
                 pr = subprocess.run(["gh", "pr", "list", "--head", rec["branch"], "--state", "all", "--limit", "1",
                                      "--json", "number,state,url,headRefOid"], cwd=path, capture_output=True, text=True)
                 try:
@@ -1467,11 +1478,6 @@ def status_rows(run: str, data: Dict[str, Any], with_git: bool = True) -> List[D
         row["questions"] = [q for q, t in data.get("questions", {}).items() if t == task_id]
         rows.append(row)
     return rows
-
-
-def shutil_which(name: str) -> Optional[str]:
-    from shutil import which
-    return which(name)
 
 
 def status_lines(rows: List[Dict[str, Any]]) -> List[str]:
@@ -1614,29 +1620,7 @@ def heartbeat_path(task: str, suffix: str) -> Path:
 
 def load_creds(task: str) -> Dict[str, Any]:
     path = creds_path(task)
-    creds = json.loads(path.read_text()) if path.exists() else {}
-    if os.environ.get("ORCW_FROM"):
-        creds["from"] = os.environ["ORCW_FROM"]
-    if os.environ.get("ORCW_CAPABILITY"):
-        creds["capability"] = os.environ["ORCW_CAPABILITY"]
-    return creds
-
-
-def store_inline_creds(ns: argparse.Namespace, task: str) -> None:
-    """--from/--capability given on any worker verb are stored for later verbs."""
-    inline = {k: v for k, v in (("from", getattr(ns, "from_handle", None)),
-                                ("capability", getattr(ns, "capability", None))) if v}
-    if not inline:
-        return
-    path = creds_path(task)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    stored = json.loads(path.read_text()) if path.exists() else {}
-    stored.update(inline)
-    path.write_text(json.dumps(stored) + "\n")
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+    return json.loads(path.read_text()) if path.exists() else {}
 
 
 def worker_send_args(ids: Dict[str, Any], need_capability: bool) -> List[str]:
@@ -1652,22 +1636,8 @@ def worker_send_args(ids: Dict[str, Any], need_capability: bool) -> List[str]:
     return args
 
 
-PREAMBLE_RE = {
-    "from": re.compile(r"--from\s+(\S+)"),
-    "capability": re.compile(r"--dispatch-capability\s+(\S+)"),
-    "task": re.compile(r"--task-id\s+(\S+)"),
-    "dispatch": re.compile(r"--dispatch-id\s+(\S+)"),
-}
-
-
 def cmd_w_init(ns: argparse.Namespace) -> int:
     found: Dict[str, str] = {}
-    if ns.preamble_file:
-        text = read_spec(ns.preamble_file)
-        for key, rx in PREAMBLE_RE.items():
-            m = rx.search(text)
-            if m:
-                found[key] = m.group(1).strip("\"'\\")
     if ns.from_handle:
         found["from"] = ns.from_handle
     if ns.capability:
@@ -1677,11 +1647,10 @@ def cmd_w_init(ns: argparse.Namespace) -> int:
     if ns.dispatch:
         found["dispatch"] = ns.dispatch
     if not found.get("from") and not found.get("capability"):
-        raise Refused("nothing to store: pass --preamble-file - and paste your preamble, "
-                      "or --from <handle> --dispatch-capability <token>")
+        raise Refused("nothing to store: pass --from <handle> --capability <token> from your preamble")
     if not found.get("task"):
         probe = argparse.Namespace(task=None, dispatch=found.get("dispatch"), run=None)
-        found["task"] = _worker_ids(probe)["task"]
+        found["task"] = worker_ids(probe)["task"]
     path = creds_path(found["task"])
     path.parent.mkdir(parents=True, exist_ok=True)
     stored = json.loads(path.read_text()) if path.exists() else {}
@@ -1729,7 +1698,6 @@ def start_heartbeat(task: str) -> bool:
 
 
 def cmd_w_heartbeat_loop(ns: argparse.Namespace) -> int:
-    import fcntl
     lock_path = heartbeat_path(ns.task, "lock")
     stop_path = heartbeat_path(ns.task, "stop")
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1740,8 +1708,7 @@ def cmd_w_heartbeat_loop(ns: argparse.Namespace) -> int:
             return EXIT_OK
         interval = max(float(os.environ.get("ORCW_HEARTBEAT_INTERVAL", "300")), 0.1)
         while not stop_path.exists():
-            probe = argparse.Namespace(task=ns.task, dispatch=None, run=None,
-                                       from_handle=None, capability=None)
+            probe = argparse.Namespace(task=ns.task, dispatch=None, run=None)
             try:
                 ids = worker_ids(probe)
                 args = ["orchestration", "send", "--type", "heartbeat", "--subject", "alive",
@@ -1766,12 +1733,6 @@ def cmd_w_heartbeat(ns: argparse.Namespace) -> int:
 
 
 def worker_ids(ns: argparse.Namespace) -> Dict[str, Any]:
-    ids = _worker_ids(ns)
-    store_inline_creds(ns, ids["task"])
-    return ids
-
-
-def _worker_ids(ns: argparse.Namespace) -> Dict[str, Any]:
     task, dispatch, run = getattr(ns, "task", None), getattr(ns, "dispatch", None), getattr(ns, "run", None)
     if not task:
         top = git(os.getcwd(), "rev-parse", "--show-toplevel")
@@ -1852,7 +1813,7 @@ def cmd_w_ask(ns: argparse.Namespace) -> int:
                     timeout=timeout_ms / 1000 + 30, allow_fail=True)
         view = dict(view, **{k: v for k, v in project(result(docs), "ask").items() if v is not None})
     if view["answer"] is None:
-        emit(ns, view, docs, [f"pend   {view['message']}  still unanswered; `orcw w ask --resume {view['message']}` later"])
+        emit(ns, view, docs, [f"pend   {view['message']}  still unanswered; `orcw w resume {view['message']}` later"])
         return EXIT_OK
     emit(ns, view, docs, [f"answer {view['message']}  | {trunc(view['answer'], 100)}"])
     return EXIT_OK
@@ -1871,28 +1832,17 @@ def cmd_w_resume(ns: argparse.Namespace) -> int:
 
 def cmd_w_done(ns: argparse.Namespace) -> int:
     ids = worker_ids(ns)
-    if ns.summary:
-        if ns.subject or ns.body:
-            raise Refused("--summary/--report cannot be combined with the legacy subject/--body form")
-        if not ns.report:
-            raise Refused("--report <file|-> is required with --summary")
-        subject, body_source = ns.summary, ns.report
-        report_path = None if ns.report == "-" else ns.report
-    else:
-        if not ns.subject or not ns.body:
-            raise Refused("use --summary <text> --report <file|->")
-        subject, body_source, report_path = ns.subject, ns.body, ns.report
-    body = read_spec(body_source)
+    body = read_spec(ns.report)
     if not body.strip():
         raise Refused("completion report is empty")
     outcome = "succeeded" if ns.ok else "failed"
-    args = ["orchestration", "send", "--type", "worker_done", "--subject", subject, "--body", body,
+    args = ["orchestration", "send", "--type", "worker_done", "--subject", ns.summary, "--body", body,
             "--task-id", ids["task"], "--dispatch-id", ids["dispatch"], "--outcome", outcome]
-    args += worker_send_args(ids, need_capability=not ns.no_capability)
+    args += worker_send_args(ids, need_capability=True)
     if ns.files:
         args += ["--files-modified", ns.files]
-    if report_path:
-        args += ["--report-path", report_path]
+    if ns.report != "-":
+        args += ["--report-path", ns.report]
     docs = orca(*args)
     heartbeat_path(ids["task"], "stop").write_text("done\n")
     view = project(result(docs), "send")
@@ -1908,8 +1858,6 @@ def cmd_w_done(ns: argparse.Namespace) -> int:
 def add_worker_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--task")
     p.add_argument("--dispatch")
-    p.add_argument("--from", dest="from_handle", help="shared flag, see `orcw w --help`")
-    p.add_argument("--dispatch-capability", "--capability", dest="capability", help="shared flag, see `orcw w --help`")
     add_common(p)
 
 
@@ -1933,8 +1881,7 @@ def build_parser() -> argparse.ArgumentParser:
             "A timeout is exit 1 with the request id when Orca printed one; `orcw request <id>` asks\n"
             "whether that mutation landed before you retry anything.\n"
             "Not wrapped (use `orca skills get orchestration`): gate-*, --on <environment>, worker-stop,\n"
-            "worker-abandon, worker-retain, reset, legacy Runs.\n"
-            "`orcw help projections` lists which Orca fields survive into --json output."
+            "worker-abandon, worker-retain, reset, legacy Runs."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -1961,7 +1908,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--agent", default="claude", help="claude | codex | ... (default claude)")
     p.add_argument("--share", action="store_true",
                    help="allow a second live worker in the same worktree (they will see each other's edits)")
-    p.add_argument("--model", help="EXPERIMENTAL, untested live: provider model id (needs the launch-preferences capability)")
+    p.add_argument("--model", help="EXPERIMENTAL, untested live: provider model id for claude, codex, cursor, antigravity or muse "
+                        "(needs the launch-preferences capability); other agents use their own config")
     p.add_argument("--effort", help="EXPERIMENTAL: reasoning effort; requires --model")
     p.add_argument("--setup", default="run", choices=["run", "skip", "inherit"])
     p.add_argument("--after", action="append", default=[], metavar="TASK",
@@ -2022,9 +1970,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("target")
     p.add_argument("--limit", type=int, default=50)
     p.add_argument("--restart", action="store_true", help="ignore the saved cursor")
-    p.add_argument("--source", default="terminal", choices=["terminal", "transcript", "auto"],
-                   help="terminal (default) = screen tail; transcript = hook-reported agent transcript, "
-                        "which on 1.4.196 returned object keys instead of text")
+    p.add_argument("--source", default="auto", choices=["terminal", "transcript", "auto"],
+                   help="auto (default) = Orca picks; terminal = screen tail, refused for workers without a "
+                        "terminal; transcript = hook-reported agent transcript, which on 1.4.196 returned "
+                        "object keys instead of text")
     add_common(p)
     p.set_defaults(fn=cmd_read)
 
@@ -2078,18 +2027,15 @@ def build_parser() -> argparse.ArgumentParser:
             "\n"
             "Shared flags (every verb):\n"
             "  --task <id> --dispatch <id>      override the worktree-based lookup of your task\n"
-            "  --from <handle>                  your terminal handle (the --from value in your preamble)\n"
-            "  --dispatch-capability <token>    the token from your preamble; both are stored on first use\n"
             "  --json | --raw                   projected JSON, or Orca's own output\n"
             "Durations (--timeout): 600, 600s, 10m, or 1h."
         ),
     )
     ws = w.add_subparsers(dest="w_cmd", metavar="init|ids|mail|heartbeat|ask|resume|done")
     q = ws.add_parser("init", help="store --from and --capability from the injected preamble; starts heartbeats")
-    q.add_argument("--preamble-file", help="compatibility form: - for stdin, or a file holding the preamble")
     q.add_argument("--from", dest="from_handle", help="your --from handle from the preamble")
     q.add_argument("--dispatch-capability", "--capability", dest="capability",
-                   help="alternative to --preamble-file: your --dispatch-capability token")
+                   help="your --dispatch-capability token from the preamble")
     q.add_argument("--task")
     q.add_argument("--dispatch")
     add_common(q)
@@ -2122,31 +2068,13 @@ def build_parser() -> argparse.ArgumentParser:
     g = q.add_mutually_exclusive_group(required=True)
     g.add_argument("--ok", action="store_true")
     g.add_argument("--failed", action="store_true")
-    q.add_argument("subject", nargs="?", help="legacy subject; prefer --summary")
-    q.add_argument("--summary", help="short completion status")
-    q.add_argument("--body", help="legacy report input; prefer --report")
+    q.add_argument("--summary", required=True, help="short completion status")
     q.add_argument("--files", help="comma-separated changed files")
-    q.add_argument("--report", help="full report file, or - for stdin")
-    q.add_argument("--no-capability", action="store_true", help="send without a stored capability (Orca will likely reject)")
+    q.add_argument("--report", required=True, help="full report file, or - for stdin")
     add_worker_common(q)
     q.set_defaults(fn=cmd_w_done)
     w.set_defaults(fn=lambda ns: (w.print_help(), EXIT_OK)[1])
-
-    p = sub.add_parser("help", help="help projections: which Orca fields survive into --json")
-    p.add_argument("topic", nargs="?")
-    p.set_defaults(fn=cmd_help)
     return ap
-
-
-def cmd_help(ns: argparse.Namespace) -> int:
-    if ns.topic == "projections":
-        for name, spec in PROJECTIONS.items():
-            print(name)
-            for key, paths in spec.items():
-                print(f"  {key:<15} <- {' | '.join(paths)}")
-        return EXIT_OK
-    build_parser().print_help()
-    return EXIT_OK
 
 
 def main(argv: Optional[List[str]] = None) -> int:

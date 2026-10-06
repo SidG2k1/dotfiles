@@ -114,16 +114,12 @@ if a[:2] == ["orchestration", "worker-start"]:
         err("selector_not_found", "Worktree selector did not resolve.", selector=flag("--worktree"))
     ok({"state": "ready", "dispatch": {"id": "ctx_0001"}, "worker": {"agent_terminal_handle": flag("--terminal", "term_agent1")},
         "launch": {"requested": {}, "effective": {}}})
-if a[:2] == ["orchestration", "dispatch"]:
-    ok({"dispatched": True})
 if a[:2] == ["orchestration", "dispatch-show"]:
     ok({"dispatch": {"id": "ctx_0001", "run_id": "run_test0001", "task_id": flag("--task"),
         "status": env("FAKE_DISPATCH_STATUS"), "assignee_handle": "term_agent1", "depth": 1}})
 if a[:2] == ["orchestration", "check"]:
     if "--ack" in a and "--wait" not in a:
         ok({"acknowledged": flag("--ack")})
-    if "--peek" in a:
-        ok({"messages": [{"id": "msg_c1", "type": "status", "subject": "pin the tag", "body": "use 0.12.238", "from_handle": "term_coord"}], "count": 1})
     if "--unread" in a:
         state = os.path.join(os.environ["ORCW_HOME"], "fake-mail-read")
         if os.path.exists(state):
@@ -249,7 +245,6 @@ out_has "task   task_0001  dispatch ctx_0001  supervised"
 out_has "branch user-x/rel"
 log_has '"worktree", "create", "--name", "rel", "--setup", "run", "--repo", "name:demo", "--no-parent", "--agent", "claude"'
 log_has '"worker-start", "--task", "task_0001", "--run", "run_test0001", "--worktree", "id:repo-1::'"$WT"'", "--terminal", "term_agent1"'
-log_lacks '"--inject"'
 grep -q "Branch is user-x/rel in $WT" "$ORCW_HOME/fake-spec-1.md" || fail "placeholders not substituted from the real worktree"
 grep -q "w init --from <handle> --capability <token>" "$ORCW_HOME/fake-spec-1.md" || fail "trailer does not show the short init"
 grep -q "Every \`orcw\` below means \`$REPO/bin/orcw\`" "$ORCW_HOME/fake-spec-1.md" || fail "trailer lacks the launcher path"
@@ -281,7 +276,6 @@ err_has "exclusive"
 FAKE_WORKER_START=fail expect_exit 1 "$ORCW" task --spec "$TEST_ROOT/spec.md" --repo demo --name rel2 --share
 err_has "selector_not_found"
 err_has "orcw task --existing task_0003 --in <worktree>"
-log_lacks '"--inject"'
 grep -q '"status": "unassigned"' "$ORCW_HOME/runs/run_test0001/tasks/task_0003.json" || fail "unassigned task not recorded"
 : >"$LOG"
 expect_exit 0 "$ORCW" task --existing task_0003 --in current --share
@@ -439,28 +433,11 @@ FAKE_DISPATCH_STATUS=completed expect_exit 2 env -C "$WT" "$ORCW" w ids
 err_has "this preamble is stale"
 
 printf 'Did the thing.\n' >"$TEST_ROOT/report.md"
-expect_exit 2 env -C "$WT" "$ORCW" w "done" --ok "Done" --body "$TEST_ROOT/report.md"
+expect_exit 2 env -C "$WT" "$ORCW" w "done" --ok --summary "Done" --report "$TEST_ROOT/report.md"
 err_has "no dispatch capability stored"
 
-cat >"$TEST_ROOT/preamble.txt" <<'EOF'
-  orca orchestration send --from term_agent1 \
-    --type worker_done --subject "<short status>" \
-    --task-id task_0006 --dispatch-id ctx_0001 --outcome succeeded \
-    --dispatch-capability cap_secret_123
-EOF
-expect_exit 0 env -C "$WT" "$ORCW" w init --preamble-file "$TEST_ROOT/preamble.txt"
+expect_exit 0 env -C "$WT" "$ORCW" w init --from term_agent1 --capability cap_secret_123
 out_has "init   task task_0006  dispatch ctx_0001  from term_agent1  capability stored"
-out_has "later \`orcw w\` commands need no flags"
-# the advertised form: paste the preamble on stdin
-"$ORCW" w init --preamble-file - --task task_0005 >"$TEST_ROOT/out" 2>"$TEST_ROOT/err" <<'EOF' || fail "stdin init exited $?"
-You are working inside Orca. Your coordinator's terminal handle is: term_coord
-  orca orchestration send --from term_agent1 \
-    --task-id task_0005 --dispatch-id ctx_0001 --outcome succeeded \
-    --dispatch-capability cap_from_stdin
-=== TASK ===
-EOF
-out_has "init   task task_0005  dispatch ctx_0001  from term_agent1  capability stored"
-grep -q cap_from_stdin "$ORCW_HOME/workers/task_0005.json" || fail "stdin preamble not parsed"
 
 : >"$LOG"
 expect_exit 0 env -C "$WT" "$ORCW" w heartbeat implementing
@@ -480,13 +457,7 @@ out_has "done   task_0006  succeeded  message msg_s1"
 log_has '"send", "--type", "worker_done", "--subject", "Done", "--body", "Did the thing.\\n", "--task-id", "task_0006", "--dispatch-id", "ctx_0001", "--outcome", "succeeded", "--from", "term_agent1", "--dispatch-capability", "cap_secret_123", "--files-modified", "a.tf,b.tf"'
 log_has '"--report-path", "'"$TEST_ROOT/report.md"'"'
 
-# one-shot credentials on the verb itself, for a task with nothing stored
-: >"$LOG"
-expect_exit 0 env -C "$WT" "$ORCW" w "done" --ok "One shot" --body "$TEST_ROOT/report.md" --task task_0002 --from term_agent1 --dispatch-capability cap_inline
-log_has '"--task-id", "task_0002", "--dispatch-id", "ctx_0001", "--outcome", "succeeded", "--from", "term_agent1", "--dispatch-capability", "cap_inline"'
-grep -q cap_inline "$ORCW_HOME/workers/task_0002.json" || fail "inline credentials not stored"
-
-FAKE_DISPATCH_STATUS=completed expect_exit 2 env -C "$WT" "$ORCW" w "done" --ok "Stale" --body "$TEST_ROOT/report.md"
+FAKE_DISPATCH_STATUS=completed expect_exit 2 env -C "$WT" "$ORCW" w "done" --ok --summary "Stale" --report "$TEST_ROOT/report.md"
 log_lacks '"--subject", "Stale"'
 
 : >"$LOG"
@@ -502,10 +473,6 @@ out_has "mail   0 unread message(s)"
 expect_exit 0 "$ORCW" request 882fa58b-0000-0000-0000-000000000000
 out_has "req    882fa58b-0000-0000-0000-000000000000  absent  no receipt here"
 log_has '"request-show", "--request", "882fa58b-0000-0000-0000-000000000000"'
-
-expect_exit 0 "$ORCW" w --help
-out_has "Shared flags (every verb)"
-out_has "--dispatch-capability <token>"
 
 # ---------------------------------------------------------------- terminal reuse remains bound to its worktree
 : >"$LOG"

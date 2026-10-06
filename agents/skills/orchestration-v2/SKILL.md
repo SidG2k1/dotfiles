@@ -1,12 +1,11 @@
 ---
 name: orchestration-v2
 description: >-
-  Coordinate or hand off work to other agents in Orca with the `orcw` wrapper,
-  and report back as an orcw worker. Coordinator: supervising workers, waiting
-  for results, task DAGs, ask/reply, "hand off / another worktree / another
-  agent" requests. Worker: your task spec carries an "orcw working agreement"
-  and tells you to run `orcw w init`. Prefer this over the raw `orchestration`
-  skill for the whole run lifecycle.
+  Use the `orcw` wrapper only when the user explicitly requests Orca or orcw,
+  or when an assigned Orca task carries an orcw working agreement. Coordinate
+  or hand off Orca work, or report back as an Orca worker. Generic requests for
+  subagents, handoffs, or a different model do not trigger this skill. Prefer
+  this over the raw `orchestration` skill for the Orca run lifecycle.
 ---
 
 # Orca orchestration via orcw
@@ -18,10 +17,9 @@ description: >-
 - Before `orcw task` or `orcw handoff`, identify the worker agent. If the user
   did not name one, ask: "Which agent should I use (for example, codex, claude,
   or opencode)?" Wait for the answer, then pass it as `--agent <agent>`.
-- "hand off", "handover", "give to another agent/worktree", a model or effort
-  request: `orcw handoff --repo <r> --name <wt> --agent <agent> --spec <file>`,
-  then stop.
-- "supervise", "monitor", "wait for results", "coordinate", "DAG": the loop.
+- For an explicit Orca handoff request:
+  `orcw handoff --repo <r> --name <wt> --agent <agent> --spec <file>`, then stop.
+- For an explicit Orca coordination request, use the coordinator loop.
 - Never substitute Claude/Codex subagents when the user asked for Orca.
 
 ## Coordinator loop
@@ -60,12 +58,10 @@ Manual form: `orcw wait`, then `orcw done <delivery> [--reuse <task>=<next>]`.
     orcw w done --ok --summary "<status>" --report report.md --files a,b
 
 Init infers the task and dispatch from the worktree and starts automatic
-heartbeats. The preamble-file form remains available for shared worktrees.
-After init, use `orcw w` instead of the preamble's raw commands. Exit 2 from a
-`w` verb is orcw refusing (message says why); exit 1 is Orca's error, printed
-whole. Send `done` once, then idle. No sub-workers.
+heartbeats. After init, use `orcw w` instead of the preamble's raw commands.
+Exit codes match the coordinator's. Send `done` once, then idle. No
+sub-workers.
 
 ## Not wrapped
 
-Gates, remote `--on` workers, `worker-stop`, `worker-retain`, `reset`, legacy
-Runs: `orca skills get orchestration`.
+The `orcw --help` epilog lists what needs `orca skills get orchestration`.
