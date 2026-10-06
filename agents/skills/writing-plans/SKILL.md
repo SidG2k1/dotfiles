@@ -56,7 +56,7 @@ independently testable deliverable.
 - "Run it to make sure it fails" - step
 - "Implement the minimal code to make the test pass" - step
 - "Run the tests and make sure they pass" - step
-- "Commit" - step
+- "Commit (if authorized)" - step
 
 ## Saved Plan Header
 
@@ -126,7 +126,7 @@ def function(input):
 Run: `pytest tests/path/test.py::test_name -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Commit (if authorized)**
 
 ```bash
 git add tests/path/test.py src/path/file.py

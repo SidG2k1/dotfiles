@@ -66,7 +66,7 @@ agents/skills/technical-meeting-brief	~/.agents/skills/technical-meeting-brief	l
 agents/skills/brainstorming	~/.agents/skills/brainstorming	link	Forked from superpowers 6.2.0: explore intent, requirements, and design before creative work. Its optional visual companion (scripts/server.cjs) needs node on PATH and silently no-ops without it.
 agents/skills/systematic-debugging	~/.agents/skills/systematic-debugging	link	Forked from superpowers 6.2.0: root-cause debugging process before proposing fixes.
 agents/skills/verification-before-completion	~/.agents/skills/verification-before-completion	link	Forked from superpowers 6.2.0: run verification and confirm output before claiming done.
-agents/skills/writing-plans	~/.agents/skills/writing-plans	link	Forked from superpowers 6.2.0: turn a spec into a bite-sized, testable implementation plan file.
+agents/skills/writing-plans	~/.agents/skills/writing-plans	link	Forked from superpowers 6.2.0: turn a spec into a bite-sized, testable implementation plan.
 agents/skills/executing-plans	~/.agents/skills/executing-plans	link	Forked from superpowers 6.2.0: execute a written plan inline with review checkpoints.
 agents/skills/subagent-driven-development	~/.agents/skills/subagent-driven-development	link	Forked from superpowers 6.2.0: execute a plan via fresh subagent per task with two-stage review; bundles its own code-reviewer.md prompt.
 agents/skills/dispatching-parallel-agents	~/.agents/skills/dispatching-parallel-agents	link	Forked from superpowers 6.2.0: fan independent tasks out to parallel agents.

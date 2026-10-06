@@ -104,7 +104,6 @@
 !/agents/skills/brainstorming/scripts/server.cjs
 !/agents/skills/brainstorming/scripts/start-server.sh
 !/agents/skills/brainstorming/scripts/stop-server.sh
-!/agents/skills/brainstorming/spec-document-reviewer-prompt.md
 !/agents/skills/brainstorming/visual-companion.md
 !/agents/skills/dispatching-parallel-agents/SKILL.md
 !/agents/skills/executing-plans/SKILL.md
@@ -125,7 +124,6 @@
 !/agents/skills/systematic-debugging/root-cause-tracing.md
 !/agents/skills/verification-before-completion/SKILL.md
 !/agents/skills/writing-plans/SKILL.md
-!/agents/skills/writing-plans/plan-document-reviewer-prompt.md
 
 # ---- per-tool config ----
 !/config/starship.toml

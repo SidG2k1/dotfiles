@@ -1,6 +1,6 @@
 ---
 name: receiving-code-review
-description: Use when receiving code review feedback, before implementing suggestions, especially if feedback seems unclear or technically questionable - requires technical rigor and verification, not performative agreement or blind implementation
+description: Evaluate code or design review feedback before applying it, especially when suggestions are unclear, technically questionable, or add unnecessary complexity.
 ---
 
 # Code Review Reception
@@ -10,6 +10,10 @@ description: Use when receiving code review feedback, before implementing sugges
 Code review requires technical evaluation, not emotional performance.
 
 **Core principle:** Verify before implementing. Ask before assuming. Technical correctness over social comfort.
+
+## Weighing suggestions
+
+Compare the concrete benefit with implementation and operational complexity. Distinguish a necessary correction from an optional alternative or a hypothetical concern. Do not treat another agent's confidence as evidence.
 
 ## The Response Pattern
 
@@ -27,7 +31,7 @@ WHEN receiving code review feedback:
 ## Forbidden Responses
 
 **NEVER:**
-- "You're absolutely right!" (explicit instruction-file violation)
+- "You're absolutely right!"
 - "Great point!" / "Excellent feedback!" (performative)
 - "Let me implement that now" (before verification)
 

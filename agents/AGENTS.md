@@ -2,9 +2,25 @@ Use `uv` over `python3` when you can, use matplotlib/seaborn/yfinance and any ot
 Do not include AI-generation branding in PR descriptions or commits
 This file is shared across every machine, so it states no machine's contents. Which TeX engine, model runtime, GPU, or CLI happens to be installed belongs in `~/.agents/AGENTS.local.md` (untracked, per machine); check a tool exists before building on it rather than assuming.
 Audio transcription (local, on-device, mlx-whisper): runbook in `~/.agents/reference/transcription.md` (repo: `agents/reference/transcription.md`).
-When adding a personal skill under `~/.agents/skills/`, symlink that skill directory into both `~/.claude/skills/` and `~/.codex/skills/`, and verify all paths resolve to the same `SKILL.md` (recipes in `~/.agents/SKILLS.md`).
+To add a personal skill, follow `~/.agents/SKILLS.md`.
 When implementing or reviewing code changes, apply the `anti-slop` skill by default: smallest correct change that fits the codebase.
-For multi-agent work in Orca use the `orchestration-v2` skill (`orcw`); use the raw `orchestration` skill only for what `orcw --help` lists as not wrapped.
+Before claiming work is complete, fixed, or passing, apply the `verification-before-completion` skill.
+Use native subagents for multi-agent work. Use `orchestration-v2` (`orcw`) only when the user explicitly asks for Orca, or when working on an assigned Orca task. If an Orca model would be better suited to the work, you may suggest it; continue with native subagents unless the user asks to use Orca. For Orca work, use the raw `orchestration` skill only for what `orcw --help` lists as not wrapped.
+
+Read `~/.agents/AGENTS.local.md` when present for machine-local and private guidance.
+
+## Implementation and delegation
+
+- Leave new implementation work unstaged and uncommitted unless the request authorizes committing, pushing, or opening a PR. Later authorization replaces this default.
+- Give every subagent the task's scope, workspace, permissions, commit policy, applicable skills, and required checks. Preserve these constraints and approvals through delegation and compaction.
+- Before presenting delegated work for review, inspect the complete diff, check scope and verification evidence, and fix obvious issues. Identify the few parts that need the user's judgment.
+- Continue authorized routine work when the next step is clear. Resolve small problems yourself; escalate consequential ambiguity or significant unexpected failures. Do not ask again for an action already authorized.
+- After a gap, reconcile relevant code, PRs, tracker state, and newer discussions before recommending next steps. Treat memory as historical context when it disagrees with current evidence.
+- Draft messages to other people until sending is authorized. Approval to open a PR does not authorize an announcement elsewhere.
+
+## Responses
+
+Answer first. Be clear, complete, and concise. Use short numbered actions when helpful, limit tangents, and state recommendations clearly.
 
 ## Prose for Humans (PR descriptions, docs, comments, commit messages)
 
@@ -18,7 +34,4 @@ These apply to all prose I write for human readers — PR descriptions, markdown
 - **Every heading earns its place.** If cutting a heading leaves the doc still answering its core question, the heading was padding. No scaffolding sections for their own sake.
 - **Terse over thorough.** Bias toward shorter. Tables and bullets over paragraphs when the content is list-shaped.
 
-It's important when responding to the user to be:
-1. Clear
-2. Complete
-3. Concise
+Requested educational explanations and temporary diagrams may restate facts from code when that helps the reader understand. The rules against duplicating source-of-truth apply to maintained reference documentation.

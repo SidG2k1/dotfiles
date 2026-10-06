@@ -98,11 +98,6 @@ local env file you restore:
 chmod 600 ~/.env
 ```
 
-`agents/AGENTS.md` is portable-only. Claims about *this* machine's toolchain
-("Tectonic is installed", which GPU, which model runtime) go in
-`~/.agents/AGENTS.local.md`; asserting them in the tracked file sends agents on a
-fresh machine down dead ends.
-
 ## 5. Pinned AltTab source build
 
 Optional, and the longest step. Pinned to v10.12.0 (`317a485b`), before AltTab's

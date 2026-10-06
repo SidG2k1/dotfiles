@@ -11,7 +11,7 @@ Load plan, review critically, execute all tasks, report when complete.
 
 **Announce at start:** "I'm using the executing-plans skill to implement this plan."
 
-**Note:** If subagents are available (Claude Code, Codex CLI, Copilot CLI, and Gemini CLI all qualify), use subagent-driven-development instead of this skill.
+**Note:** If subagents are available (Claude Code, Codex CLI, Copilot CLI, and Gemini CLI all qualify), use subagent-driven-development instead of this skill, unless the user declined commits.
 
 ## The Process
 
@@ -34,7 +34,7 @@ For each task:
 
 After all tasks complete and verified:
 - Run the full test suite one final time and confirm it passes
-- Present integration options to your human partner (open a PR, merge, or keep iterating) and execute their choice — /pr opens the PR, /autopush ships follow-ups
+- Present integration options to your human partner (open a PR, merge, or keep iterating) and execute their choice — `gh pr create` opens the PR, /autopush ships follow-ups
 
 ## When to Stop and Ask for Help
 

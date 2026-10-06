@@ -19,6 +19,13 @@ Subagent (general-purpose):
 
     [Scene-setting: where this fits, dependencies, architectural context]
 
+    ## Working agreement
+
+    Scope and permitted side effects: [TASK_SCOPE_AND_PERMISSIONS]
+    Commit policy: commit this task's work; do not push or open a PR.
+    Applicable skills and required checks: [SKILLS_AND_CHECKS]
+    Preserve unrelated files and other agents' work. Do not expand this agreement.
+
     ## Before You Begin
 
     If you have questions about:

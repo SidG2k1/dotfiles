@@ -16,6 +16,10 @@ ledger and the tool results carry the record.
 
 **Continuous execution:** Do not pause to check in with your human partner between tasks. Execute all tasks from the plan without stopping. The only reasons to stop are: BLOCKED status you cannot resolve, ambiguity that genuinely prevents progress, or all tasks complete. "Should I continue?" prompts and progress summaries waste their time — they asked you to execute the plan, so execute it.
 
+**Commits:** SDD commits each task because its review packages and ledger
+entries are commit ranges. If your human partner declines commits at
+pre-flight (see Setup), execute the plan inline with executing-plans instead.
+
 ## When to Use
 
 ```dot
@@ -74,7 +78,7 @@ digraph process {
     "Dispatch final code reviewer (./code-reviewer.md)" [shape=box];
     "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals" [shape=box];
     "Final review clean: delete this plan's workspace" [shape=box];
-    "Verify tests, present integration options, open the PR (/pr)" [shape=box style=filled fillcolor=lightgreen];
+    "Verify tests, present integration options, open the PR" [shape=box style=filled fillcolor=lightgreen];
 
     "Setup: worktree, ledger check, read plan, pre-flight review" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Dispatch implementer subagent (./implementer-prompt.md)" -> "Implementer asks questions?";
@@ -103,7 +107,7 @@ digraph process {
     "More tasks remain?" -> "Dispatch final code reviewer (./code-reviewer.md)" [label="no"];
     "Dispatch final code reviewer (./code-reviewer.md)" -> "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals";
     "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals" -> "Final review clean: delete this plan's workspace";
-    "Final review clean: delete this plan's workspace" -> "Verify tests, present integration options, open the PR (/pr)";
+    "Final review clean: delete this plan's workspace" -> "Verify tests, present integration options, open the PR";
 }
 ```
 
@@ -151,9 +155,11 @@ Before dispatching Task 1, scan the plan once for conflicts:
 
 Present everything you find to your human partner as one batched question —
 each finding beside the plan text that mandates it, asking which governs —
-before execution begins, not one interrupt per discovery mid-plan. If the
-scan is clean, proceed without comment. The review loop remains the net for
-conflicts that only emerge from implementation.
+before execution begins, not one interrupt per discovery mid-plan. The same
+question asks for commit authorization unless your human partner already
+gave it. If the scan is clean and commits are authorized, proceed without
+comment. The review loop remains the net for conflicts that only emerge
+from implementation.
 
 ## Model Selection
 
@@ -421,7 +427,7 @@ the record now. Sibling directories belong to other plans; leave them
 alone.
 
 Then verify the full test suite passes, present integration options to
-your human partner, and execute their choice — /pr opens the PR,
+your human partner, and execute their choice — `gh pr create` opens the PR,
 /autopush ships follow-ups.
 
 ## Common Rationalizations
