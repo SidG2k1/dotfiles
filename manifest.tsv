@@ -91,9 +91,12 @@ config/gnupg/common.conf	~/.gnupg/common.conf	link	Create ~/.gnupg with mode 700
 config/docker/daemon.json	~/.docker/daemon.json	merge-json	Docker Desktop rewrites this file from its Settings UI, so merge keys instead of linking. Note builder.gc.defaultKeepStorage is deprecated in favour of a builder.gc.policy array; keep the tracked keys current or Docker warns on start.
 
 # ---- scripts ----
+bin/mermaid-check	~/bin/mermaid-check	link	Render Mermaid blocks from Markdown without editing the input; needs uv and the optional pinned Mermaid CLI described in setup.md.
+config/mermaid/package.json	~/.local/share/dotfiles/mermaid/package.json	link	Pinned optional Mermaid CLI dependency; install with npm in this directory when diagram checking is needed.
 bin/dotfiles-doctor	~/bin/dotfiles-doctor	link	zshrc puts ~/bin at the front of PATH, and the script resolves its own symlink chain back to the clone, so the copy on PATH always audits this checkout. It writes nothing to the machine or the repo. git is needed to enumerate tracked files for the leak scan; jq only to verify the merge-json rows.
 bin/orcw	~/bin/orcw	link	zshrc puts ~/bin at the front of PATH. Bash launcher that resolves its symlink chain back to the clone and runs lib/orcw.py under uv (falls back to python3). Needs the orca CLI on PATH and the Orca app running; `orcw doctor` reports what the installed Orca version lacks.
 bin/rebuild-alttab	~/bin/rebuild-alttab	link	zshrc puts ~/bin at the front of PATH. Self-contained bash; override the checkout location with ALTTAB_SRC. Needs full Xcode selected, not just the Command Line Tools.
+bin/macos-defaults	~/bin/macos-defaults	link	zshrc puts ~/bin at the front of PATH. Run by hand; installing it changes no setting, and the defaults it writes need a logout to apply.
 
 # ---- never ----
 zprofile	~/.zprofile	never	On a real machine this target is owned by other tools' installers - Homebrew shellenv, container and VM shell hooks, toolchain env snippets - which append to it and rewrite it on upgrade. Overwriting silently removes working integrations. Add the brew shellenv line by hand, or keep it in ~/.zshenv.

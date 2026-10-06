@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# macos-defaults — apply tracked macOS user defaults.
+#
+# KeyRepeat 2 / InitialKeyRepeat 15 are the fastest values the System Settings
+# slider offers. Disabling press-and-hold makes held keys repeat (hjkl in vim)
+# instead of opening the accent picker. Log out and back in to take effect.
+
+set -euo pipefail
+
+defaults write -g ApplePressAndHoldEnabled -bool false
+defaults write -g KeyRepeat -int 2
+defaults write -g InitialKeyRepeat -int 15
+
+printf '==> Applied. Log out and back in for key repeat changes to take effect.\n'

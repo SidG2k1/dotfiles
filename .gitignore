@@ -57,7 +57,9 @@
 
 # ---- scripts (installed to ~/bin, must stay mode 755) ----
 !/bin/dotfiles-doctor
+!/bin/mermaid-check
 !/bin/rebuild-alttab
+!/bin/macos-defaults
 !/bin/orcw
 
 # ---- shell ----
@@ -138,6 +140,7 @@
 !/config/gnupg/common.conf
 !/config/vscode/settings.json
 !/config/yt-dlp/config
+!/config/mermaid/package.json
 
 # ---------------------------------------------------------------------------
 # Denylist, second line of defence. These come AFTER the allowlist so the last

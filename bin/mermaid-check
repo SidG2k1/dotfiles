@@ -1,0 +1,54 @@
+#!/usr/bin/env -S uv run --script
+"""Render Markdown's Mermaid blocks without changing the source file."""
+import argparse
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("file", type=Path)
+    args = parser.parse_args()
+    source = args.file.read_text()
+    blocks = []
+    fence = None
+    body = []
+    start = 0
+    for number, line in enumerate(source.splitlines(), 1):
+        if fence is None:
+            match = re.match(r"^\s*(`{3,}|~{3,})mermaid\s*$", line)
+            if match:
+                fence, start, body = match[1], number, []
+        elif re.match(r"^\s*" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*$", line):
+            blocks.append((start, "\n".join(body)))
+            fence = None
+        else:
+            body.append(line)
+    if fence is not None:
+        parser.error(f"unclosed Mermaid block at line {start}")
+    if not blocks:
+        print(f"{args.file}: no Mermaid blocks")
+        return 0
+    executable = os.environ.get("MMDC") or shutil.which("mmdc")
+    if not executable:
+        executable = Path.home() / ".local/share/dotfiles/mermaid/node_modules/.bin/mmdc"
+    if not Path(executable).is_file():
+        parser.error("Mermaid CLI is missing; see dotfiles/setup.md")
+    with tempfile.TemporaryDirectory(prefix="mermaid-check-") as directory:
+        for index, (line, definition) in enumerate(blocks, 1):
+            input_file = Path(directory) / f"diagram-{index}.mmd"
+            input_file.write_text(definition)
+            result = subprocess.run([str(executable), "-i", str(input_file), "-o", str(input_file.with_suffix(".svg"))])
+            if result.returncode:
+                print(f"{args.file}:{line}: Mermaid rendering failed", flush=True)
+                return result.returncode
+    print(f"{args.file}: {len(blocks)} diagram(s) rendered successfully")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

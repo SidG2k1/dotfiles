@@ -163,7 +163,23 @@ The optional Ghostty appearance preset is installed as
 on another machine, copy its settings above the managed block in Ghostty's
 `config`; local display adjustments stay outside that block.
 
-## 8. Troubleshooting
+## 8. Mermaid validation
+
+`mermaid-check FILE.md` renders each Mermaid block in temporary storage and
+leaves the Markdown unchanged. It requires `uv` and the pinned npm dependency
+installed by this optional setup step:
+
+```sh
+./install.sh --only scripts
+npm install --prefix "$HOME/.local/share/dotfiles/mermaid" --no-audit --no-fund
+mermaid-check path/to/document.md
+```
+
+The dependency version is owned by `config/mermaid/package.json`. Rendering
+checks syntax and tool compatibility, not whether a diagram accurately explains
+its sources. The npm install may download a headless browser.
+
+## 9. Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
