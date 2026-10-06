@@ -16,15 +16,11 @@ brew "k9s"
 # `rclone config`; the alias is a command-not-found without the binary.
 brew "rclone"
 
-# Unlocks config/yt-dlp/config - the retry backoff, embed-metadata, SponsorBlock,
-# and h264/1080p format-sort defaults. That config is inert without the binary.
+# Download defaults live in config/yt-dlp/config.
 brew "yt-dlp"
 
-# Not optional *for* yt-dlp: the tracked config sets --merge-output-format,
-# --remux-video and --embed-thumbnail/-metadata/-subs, all of which shell out to
-# ffmpeg. Without it those downloads fail at the merge step. The same config sets
-# --js-runtimes node; no entry here provides node on purpose, because whatever
-# manages node on the machine (proto, mise, nvm, brew) owns that decision.
+# yt-dlp needs ffmpeg for merging and embedding. Node.js is managed separately
+# by the machine's runtime manager.
 brew "ffmpeg"
 
 # Backs vimrc's markdown <PageDown><PageDown> mapping

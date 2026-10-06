@@ -91,6 +91,7 @@ config/gnupg/common.conf	~/.gnupg/common.conf	link	Create ~/.gnupg with mode 700
 config/docker/daemon.json	~/.docker/daemon.json	merge-json	Docker Desktop rewrites this file from its Settings UI, so merge keys instead of linking. Note builder.gc.defaultKeepStorage is deprecated in favour of a builder.gc.policy array; keep the tracked keys current or Docker warns on start.
 
 # ---- scripts ----
+bin/yt-captions	~/bin/yt-captions	link	Needs uv and Node.js; uv supplies the Python dependencies from inline script metadata.
 bin/mermaid-check	~/bin/mermaid-check	link	Render Mermaid blocks from Markdown without editing the input; needs uv and the optional pinned Mermaid CLI described in setup.md.
 config/mermaid/package.json	~/.local/share/dotfiles/mermaid/package.json	link	Pinned optional Mermaid CLI dependency; install with npm in this directory when diagram checking is needed.
 bin/dotfiles-doctor	~/bin/dotfiles-doctor	link	zshrc puts ~/bin at the front of PATH, and the script resolves its own symlink chain back to the clone, so the copy on PATH always audits this checkout. It writes nothing to the machine or the repo. git is needed to enumerate tracked files for the leak scan; jq only to verify the merge-json rows.

@@ -48,12 +48,14 @@
 !/lib/brew-dependencies.sh
 !/lib/merge-toml.py
 !/lib/orcw.py
+!/lib/yt-captions.py
 
 # ---- CI ----
 !/.github/workflows/ci.yml
 
 # ---- tests ----
 !/tests/orcw.sh
+!/tests/test_yt_captions.py
 
 # ---- scripts (installed to ~/bin, must stay mode 755) ----
 !/bin/dotfiles-doctor
@@ -61,6 +63,7 @@
 !/bin/rebuild-alttab
 !/bin/macos-defaults
 !/bin/orcw
+!/bin/yt-captions
 
 # ---- shell ----
 !/zshenv

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+self=${BASH_SOURCE[0]}
+while [ -L "$self" ]; do
+	link=$(readlink "$self")
+	case $link in
+	/*) self=$link ;;
+	*) self=$(dirname "$self")/$link ;;
+	esac
+done
+here=$(cd -P "$(dirname "$self")" && pwd -P)
+exec uv run --quiet --script "$here/../lib/yt-captions.py" "$@"
