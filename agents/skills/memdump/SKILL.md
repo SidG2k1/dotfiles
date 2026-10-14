@@ -1,14 +1,29 @@
 ---
 name: memdump
-description: Dump working context, learnings, open questions, and pointers to a memory file so a future session can resume the project. Use when the user invokes /memdump or asks to checkpoint before context is wiped.
+description: Save project context, decisions, assumptions, permissions, unresolved work, and source pointers for a future session. Use when the user invokes /memdump or asks to checkpoint before context is wiped.
 argument-hint: [memory-file-path]
 disable-model-invocation: true
 ---
 
 Checkpoint the current project state into the memory file path supplied by the user. If no path was supplied, ask for one before writing.
 
-1. **Read the file first** if it exists. Prefer editing over rewriting — preserve sections that are still accurate.
-2. **If the user says they want to discard prior context**, clear the supplied memory file, read it back to confirm it's empty, then write the new dump.
-3. **Reference any other guidance files** that explain the work (`AGENTS.md`, `CLAUDE.md`, agent plan files, design docs). Link to them by path rather than copying their contents.
-4. **What to capture**: the goal of the project, current branch/PR state, what's done, what's in flight, open blockers, decisions and their rationale, and any non-obvious gotchas a future session would otherwise re-discover the hard way.
-5. **Keep a `## Historical` section at the bottom** for stale context that's no longer load-bearing but might be useful for diagnosing future regressions or pitfalls.
+1. Read the existing file first. Preserve useful, accurate context and remove
+   obsolete material. Replace prior context entirely only when the user asks
+   to discard it.
+2. Capture the goal, scope, unfinished work, blockers, unresolved decisions,
+   next useful step, and non-obvious constraints or gotchas.
+3. Record accepted decisions, assumptions, conditions, and permissions with
+   their rationale, who established or approved them, date, and source link or
+   file reference when available.
+   Distinguish user decisions from proposals and agent conclusions. Preserve
+   conditions such as "only if the measurements show X" and the exact scope of
+   authorization; do not turn an exploratory question into an approved feature.
+   If the source cannot be recovered, say so rather than inventing provenance.
+4. Link to authoritative guidance, designs, code, PRs, tickets, and discussions
+   instead of copying their contents or maintaining another backlog. Include
+   external status only when it helps resumption, labeled as a dated snapshot
+   with its source and anything unverified.
+5. Keep a `## Historical` section only when older context helps explain a
+   current constraint or diagnose a future problem. Omit routine completed-work
+   narratives. Read the saved file back to confirm it preserves the decisions,
+   conditions, and unresolved work needed to resume.

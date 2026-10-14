@@ -29,7 +29,8 @@ Understand first; do not turn this ladder into a research project.
 - No interface, factory, base class, wrapper, service, repository, config layer, or generic framework for one current implementation.
 - No speculative flexibility, extension points, fallbacks, or configuration for hypothetical requirements.
 - No new dependency when built-ins, existing dependencies, or small local code suffice.
-- Preserve repository conventions. Comments explain non-obvious **why**, not obvious **what**.
+- Preserve repository conventions.
+- Prefer self-documenting code through clear names and structure. Do not add comments when the code explains itself; reserve comments for non-obvious rationale or constraints.
 - Duplication can be cheaper than the wrong abstraction. Extract only when a stable concept exists.
 
 If a small request unexpectedly produces many files, a dependency, an abstraction layer, or a large diff, reconsider the approach. Large is a warning signal, not automatically wrong.

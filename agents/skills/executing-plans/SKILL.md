@@ -1,63 +1,22 @@
 ---
 name: executing-plans
-description: Use when you have a written implementation plan to execute in a separate session with review checkpoints
+description: Execute an agreed implementation plan, respecting its scope, permissions, dependencies, and review points.
 ---
 
 # Executing Plans
 
-## Overview
+Read the plan and current project state before starting. Preserve accepted decisions, assumptions, and conditions on deferred work; proposals are not implementation requirements.
 
-Load plan, review critically, execute all tasks, report when complete.
+Use the agreed execution method. Ordinary native delegation supports independent tasks under the existing unstaged-work default. Choose subagent-driven-development only when the user agreed to its committed workflow and commits are authorized.
 
-**Announce at start:** "I'm using the executing-plans skill to implement this plan."
+## Execute
 
-**Note:** If subagents are available (Claude Code, Codex CLI, Copilot CLI, and Gemini CLI all qualify), use subagent-driven-development instead of this skill, unless the user declined commits.
+1. Verify the workspace, preserve unrelated changes, and inspect the plan for consequential gaps or conflicts.
+2. Reconcile factual uncertainty from code and existing evidence. Ask about unresolved decisions that would materially change the work.
+3. Execute authorized tasks in dependency order, using independent subagents where useful. Track enough progress to resume without repeating completed tasks.
+4. Run the meaningful checks specified by the plan and repository. Reuse valid results for unchanged code; rerun affected checks after changes or failures.
+5. Inspect the complete diff, check requirements and scope, fix obvious issues, and report the result with verification limits.
 
-## The Process
+Do not expand the task to adjacent work when the requested action is blocked. Surface proposed scope additions separately.
 
-### Step 1: Load and Review Plan
-1. Ensure an isolated workspace: create a worktree (Claude Code's worktree isolation, or `git worktree add`) or verify the existing one
-2. Read plan file
-3. Review critically - identify any questions or concerns about the plan
-4. If concerns: Raise them with your human partner before starting
-5. If no concerns: Create todos for the plan items and proceed
-
-### Step 2: Execute Tasks
-
-For each task:
-1. Mark as in_progress
-2. Follow each step exactly (plan has bite-sized steps), implementing per the `anti-slop` skill
-3. Run verifications as specified
-4. Mark as completed
-
-### Step 3: Complete Development
-
-After all tasks complete and verified:
-- Run the full test suite one final time and confirm it passes
-- Present integration options to your human partner (open a PR, merge, or keep iterating) and execute their choice — `gh pr create` opens the PR, /autopush ships follow-ups
-
-## When to Stop and Ask for Help
-
-**STOP executing immediately when:**
-- Hit a blocker (missing dependency, test fails, instruction unclear)
-- Plan has critical gaps preventing starting
-- You don't understand an instruction
-- Verification fails repeatedly
-
-**Ask for clarification rather than guessing.**
-
-## When to Revisit Earlier Steps
-
-**Return to Review (Step 1) when:**
-- Partner updates the plan based on your feedback
-- Fundamental approach needs rethinking
-
-**Don't force through blockers** - stop and ask.
-
-## Remember
-- Review plan critically first
-- Follow plan steps exactly
-- Don't skip verifications
-- Reference skills when plan says to
-- Stop when blocked, don't guess
-- Never start implementation on main/master branch without explicit user consent
+Present integration options when a decision remains.

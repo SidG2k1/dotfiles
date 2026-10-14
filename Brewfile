@@ -88,3 +88,8 @@ cask "font-jetbrains-mono-nerd-font"
 # nothing in the repo degrades without it. It is required rather than optional
 # because an external mouse is unusable on a fresh machine until it is running.
 cask "mos"
+
+# Backs the whiteboard-review agent skill, which authors its review pages
+# through Whiteboard's MCP plugin. Without it that skill reports the missing
+# dependency and stops. The fully qualified name makes brew bundle add the tap.
+cask "devdotfast/tap/whiteboard"

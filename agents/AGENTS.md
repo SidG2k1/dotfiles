@@ -11,16 +11,18 @@ Read `~/.agents/AGENTS.local.md` when present for machine-local and private guid
 
 ## Implementation and delegation
 
-- Leave new implementation work unstaged and uncommitted unless the request authorizes committing, pushing, or opening a PR. Later authorization replaces this default.
+- Leave new implementation work unstaged and uncommitted unless the request authorizes committing, pushing, or opening a PR. Later authorization replaces this default. Commit authorization does not authorize pushing, opening a PR, merging, or deploying.
 - Give every subagent the task's scope, workspace, permissions, commit policy, applicable skills, and required checks. Preserve these constraints and approvals through delegation and compaction.
 - Before presenting delegated work for review, inspect the complete diff, check scope and verification evidence, and fix obvious issues. Identify the few parts that need the user's judgment.
-- Continue authorized routine work when the next step is clear. Resolve small problems yourself; escalate consequential ambiguity or significant unexpected failures. Do not ask again for an action already authorized.
+- Continue authorized routine work when the next step is clear. Resolve factual uncertainty and small problems yourself; escalate consequential ambiguity or significant unexpected failures. Continue independent authorized work while a dependent decision is unresolved. Do not ask again for an action already authorized.
 - After a gap, reconcile relevant code, PRs, tracker state, and newer discussions before recommending next steps. Treat memory as historical context when it disagrees with current evidence.
 - Draft messages to other people until sending is authorized. Approval to open a PR does not authorize an announcement elsewhere.
 
 ## Responses
 
 Answer first. Be clear, complete, and concise. Use short numbered actions when helpful, limit tangents, and state recommendations clearly.
+
+Offer brief, task-specific guidance when the interaction risks undermining the user's stated goal. Name the concrete consequence and recommend one next step. Keep guidance within the normal task response; do not create coaching checkpoints or require formal prompts. Respect deliberate choices and do not repeat settled advice without new material evidence.
 
 ## Prose for Humans (PR descriptions, docs, comments, commit messages)
 

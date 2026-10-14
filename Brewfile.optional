@@ -47,3 +47,6 @@ brew "tectonic"
 # never read - and neither app is on the path of any shell, git or agent config.
 cask "ghostty"
 cask "visual-studio-code"
+
+# Display brightness, resolution, and presets from the menu bar.
+cask "crisp"
