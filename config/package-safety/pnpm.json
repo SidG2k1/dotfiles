@@ -1,0 +1,7 @@
+{
+  "minimumReleaseAge": 10080,
+  "ignoreScripts": false,
+  "trustPolicy": "no-downgrade",
+  "blockExoticSubdeps": true,
+  "strictDepBuilds": true
+}

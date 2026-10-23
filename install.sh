@@ -6,9 +6,10 @@
 # row in it, and the strategy column decides HOW a target is produced. Nothing
 # here hardcodes a username or a /Users/... path, and nothing writes a secret.
 #
-#   ./install.sh                      install everything
-#   ./install.sh --dry-run            print the plan, touch nothing
-#   ./install.sh --only vim           one group (see --help for the list)
+#   ./install.sh                      apply this laptop's saved selection
+#   ./install.sh list                 show optional components
+#   ./install.sh install shell git    install and remember components
+#   ./install.sh plan                 print the plan, touch nothing
 #   ./install.sh --skip-brew          leave Homebrew alone
 #   ./install.sh --skip-vim-plugins   do not clone the vim plugins
 #
@@ -47,7 +48,6 @@ done
 DOTFILES="$(cd -P "$(dirname -- "$SCRIPT_SRC")" && pwd)"
 MANIFEST="$DOTFILES/manifest.tsv"
 PLUGIN_LIST="$DOTFILES/vim/plugins.txt"
-BREWFILE="$DOTFILES/Brewfile"
 BREW_DEPENDENCIES="$DOTFILES/lib/brew-dependencies.sh"
 
 BLOCK_START='# >>> dotfiles managed block >>>'
@@ -58,9 +58,6 @@ BACKUP_ROOT="$HOME/dotfiles-backup/$(date +%Y%m%d-%H%M%S)"
 DRY_RUN=0
 SKIP_BREW=0
 SKIP_VIM_PLUGINS=0
-ONLY=""
-
-VALID_GROUPS="dirs brew shell vim terminal git agents tools scripts private never vim-plugins"
 
 # ------------------------------------------------------------------- plumbing
 
@@ -103,34 +100,23 @@ die() { printf '%serror:%s %s\n' "$C_RED" "$C_RESET" "$1" >&2; exit 1; }
 
 usage() {
 	cat <<'EOF'
-Usage: ./install.sh [--dry-run] [--only <group>] [--skip-brew] [--skip-vim-plugins]
+Usage: ./install.sh [command] [components...] [options]
 
-  --dry-run            print every action that would be taken; change nothing
-  --only <group>       restrict to one group of manifest rows (below)
-  --skip-brew          do not run `brew bundle`
-  --skip-vim-plugins   do not clone the vim/plugins.txt plugins
-  -h, --help           this text
+  list                         show components and this laptop's selection
+  install shell git claude     install and remember components (adds to selection)
+  select shell git             replace selection without installing anything
+  plan [components...]         preview an install, or the saved selection
+  (no command)                 apply this laptop's saved selection
 
-Groups. shell..never are the section headers in manifest.tsv; dirs, brew and
-vim-plugins are phases of this script with no manifest rows of their own:
-  dirs         only create the directories the other groups need, then stop
-  shell        ~/.zshenv, ~/.zshrc
-  vim          ~/.vimrc, ~/.vim/templates  (+ vim-plugins unless skipped)
-  terminal     starship, Ghostty
-  git          ~/.gitconfig include, global gitignore
-  agents       AGENTS.md (symlinked into ~/.agents, ~/.claude, ~/.codex and
-               ~/.config/opencode), Claude Code settings, every skill in
-               ~/.agents/skills linked into ~/.claude and ~/.codex, the
-               gh-stack gh extension
-  tools        gh, VS Code, yt-dlp, gnupg, docker
-  private      optional private/manifest.tsv; credentials and caches stay app-owned
-  scripts      ~/bin helpers
-  never        print the rows this repo deliberately does not install, and why
-  brew         Homebrew bundle only
-  vim-plugins  clone the vim plugins only
+  --dry-run                    preview without changing files or the selection
+  --only <component>           compatibility alias for install <component>
+  --skip-brew                  leave package installation to you
+  --skip-vim-plugins           skip plugin downloads for this run
+  -h, --help                   this text
 
-Directory creation runs for every group except `brew` and `never`, which touch
-no target; --dry-run suppresses it like everything else.
+Only core (the doctor helper) is selected initially. Choices are saved locally,
+never in the checkout. Removing a choice stops managing it; existing application
+files and packages are not uninstalled. Use list to see component dependencies.
 EOF
 }
 
@@ -177,10 +163,9 @@ expand_target() {
 }
 
 want_group() {
-	[ -z "$ONLY" ] && return 0
-	[ "$ONLY" = "$1" ] && return 0
-	# --only vim also covers the vim plugin fetch.
-	[ "$ONLY" = "vim" ] && [ "$1" = "vim-plugins" ] && return 0
+	[ "$1" = never ] && return 0
+	[ "$1" = vim-plugins ] && [ "$SKIP_VIM_PLUGINS" -eq 1 ] && return 1
+	case " $COMPONENT_ACTIVE " in *" $1 "*) return 0 ;; esac
 	return 1
 }
 
@@ -307,36 +292,70 @@ detach_repo_symlink() {
 
 # ------------------------------------------------------------ argument parsing
 
+[ -f "$DOTFILES/lib/components.sh" ] || die "component helpers are missing"
+# shellcheck source=lib/components.sh
+. "$DOTFILES/lib/components.sh"
+ACTION=apply
+REQUESTED=
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--dry-run) DRY_RUN=1 ;;
 		--skip-brew) SKIP_BREW=1 ;;
 		--skip-vim-plugins) SKIP_VIM_PLUGINS=1 ;;
 		--only)
-			[ $# -ge 2 ] || die "--only needs a group name. Valid: $VALID_GROUPS"
-			ONLY="$2"
-			shift
-			;;
-		--only=*) ONLY="${1#--only=}" ;;
+			[ $# -ge 2 ] || die "--only needs a component name"
+			[ -n "$2" ] || die "--only needs a component name"
+			ACTION=install; REQUESTED="$REQUESTED $2"; shift ;;
+		--only=*)
+			[ -n "${1#--only=}" ] || die "--only needs a component name"
+			ACTION=install; REQUESTED="$REQUESTED ${1#--only=}" ;;
+		list|install|select|plan)
+			[ "$ACTION" = apply ] || die "choose one command"
+			ACTION=$1 ;;
 		-h|--help) usage; exit 0 ;;
-		*) die "unknown option '$1'. Run './install.sh --help'." ;;
+		-*) die "unknown option '$1'; see --help" ;;
+		*)
+			[ "$ACTION" != apply ] || ACTION=install
+			REQUESTED="$REQUESTED $1" ;;
 	esac
 	shift
 done
 
-if [ -n "$ONLY" ] && [ "$ONLY" != "all" ]; then
-	_found=0
-	for _g in $VALID_GROUPS; do
-		[ "$_g" = "$ONLY" ] && _found=1
-	done
-	[ "$_found" -eq 1 ] || die "unknown group '$ONLY'. Valid: $VALID_GROUPS"
-fi
-[ "$ONLY" = "all" ] && ONLY=""
-
-[ -f "$MANIFEST" ] || die "manifest.tsv not found at $MANIFEST - is this the repo root?"
-[ -f "$BREW_DEPENDENCIES" ] || die "dependency probes not found at $BREW_DEPENDENCIES"
+[ -f "$MANIFEST" ] || die "manifest.tsv is missing"
+[ -f "$COMPONENT_CATALOG" ] || die "components.tsv is missing"
+[ -f "$BREW_DEPENDENCIES" ] || die "dependency probes are missing"
 # shellcheck source=lib/brew-dependencies.sh
 . "$BREW_DEPENDENCIES"
+if [ "$ACTION" = select ]; then COMPONENT_SAVED=core; else components_read || exit 1; fi
+components_resolve "$COMPONENT_SAVED" || exit 1
+COMPONENT_SELECTED=$COMPONENT_RESOLVED
+
+if [ "$ACTION" = list ]; then
+	[ -z "$REQUESTED" ] || die "list does not take component names"
+	printf '  %-18s %-62s %s\n' COMPONENT DESCRIPTION REQUIRES
+	while IFS=$'\t' read -r name description requires _formulae _casks; do
+		case "$name" in ''|'#'*) continue ;; esac
+		mark=' '; component_enabled "$name" && mark='*'
+		printf '%s %-18s %-62s %s\n' "$mark" "$name" "$description" "$requires"
+	done <"$COMPONENT_CATALOG"
+	printf '\n* selected on this laptop. Selection: %s\n' "$COMPONENT_SELECTION_FILE"
+	exit 0
+fi
+if [ "$ACTION" = select ]; then
+	components_resolve "$REQUESTED" || exit 1
+	COMPONENT_SELECTED=$COMPONENT_RESOLVED
+	if [ "$DRY_RUN" -eq 0 ]; then components_save; fi
+	printf 'Selection%s: %s\n' "$([ "$DRY_RUN" -eq 1 ] && printf ' preview')" "$COMPONENT_SELECTED"
+	printf 'Run ./install.sh to apply. Existing files and packages are left in place.\n'
+	exit 0
+fi
+if [ "$ACTION" = install ] && [ -z "$REQUESTED" ]; then die "name components to install (see list)"; fi
+[ "$ACTION" != plan ] || DRY_RUN=1
+if [ -z "$REQUESTED" ]; then REQUESTED=$COMPONENT_SAVED; fi
+components_resolve "$REQUESTED" || exit 1
+COMPONENT_ACTIVE=$COMPONENT_RESOLVED
+components_resolve "$COMPONENT_SAVED $COMPONENT_ACTIVE" || exit 1
+COMPONENT_SELECTED=$COMPONENT_RESOLVED
 
 # ------------------------------------------------------------------ strategies
 
@@ -608,7 +627,7 @@ do_merge_json() {
 
 	if ! command -v jq >/dev/null 2>&1; then
 		fail "jq is required to merge $(display_path "$tgt") and is not on PATH" \
-			"Install it with 'brew install jq' (it is in this repo's Brewfile) and re-run. jq is also what the Claude Code statusLine command pipes through, so the status line is blank without it."
+			"Install it with 'brew install jq' or re-run without --skip-brew."
 		return 0
 	fi
 	if ! jq -e . "$src_abs" >/dev/null 2>&1; then
@@ -699,90 +718,46 @@ do_never() {
 
 phase_dirs() {
 	heading "directories"
-	# ~/.vim/undo is here because vimrc sets undodir=~/.vim/undo//; without the
-	# directory vim reports an error on write for every buffer.
-	for d in \
-		"$HOME/bin" \
-		"$HOME/.config/git" \
-		"$HOME/.vim/pack/bundle/start" \
-		"$HOME/.vim/backup" \
-		"$HOME/.vim/swap" \
-		"$HOME/.vim/undo" \
-		"$HOME/.vim/after/plugin" \
-		"$HOME/.agents/skills" \
-		"$HOME/.claude/skills" \
-		"$HOME/.codex" \
-		"$HOME/.codex/skills"
-	do
-		if [ -d "$d" ]; then
-			ok "$(display_path "$d")"
-		elif ensure_dir "$d"; then
-			if [ "$DRY_RUN" -eq 0 ]; then changed "$(display_path "$d") created"; fi
-		fi
-	done
-	return 0
+	ensure_dir "$HOME/bin"
+	if want_group vim; then
+		local d
+		for d in backup swap undo after/plugin; do ensure_dir "$HOME/.vim/$d"; done
+	fi
+	if want_group skills; then ensure_dir "$HOME/.agents/skills"; fi
+	if want_group claude; then ensure_dir "$HOME/.claude/skills"; fi
+	if want_group codex; then ensure_dir "$HOME/.codex/skills"; fi
 }
 
 phase_brew() {
-	local brew_skip="${HOMEBREW_BUNDLE_BREW_SKIP:-}"
-	local cask_skip="${HOMEBREW_BUNDLE_CASK_SKIP:-}"
 	local kind name
-	heading "homebrew"
-	if ! command -v brew >/dev/null 2>&1; then
-		warn "brew not found - skipping 'brew bundle'. Nothing else in this install depends on it."
-		manual "Install Homebrew (see setup.md), then run: brew bundle --file=\"\$PWD/Brewfile\". Until then eza, bat, jq, delta, fzf, zoxide, starship and direnv are missing: ls/cat/git diff and the Claude status line degrade."
-		N_SKIPPED=$((N_SKIPPED + 1))
-		return 0
-	fi
-	if [ ! -f "$BREWFILE" ]; then
-		fail "Brewfile not found at $(display_path "$BREWFILE")"
-		return 0
-	fi
-	if [ "$DRY_RUN" -eq 1 ]; then
-		plan "brew bundle --file=$(display_path "$BREWFILE")"
-		return 0
-	fi
+	heading "selected dependencies"
 	while IFS=$'\t' read -r kind name; do
-		[ -n "${name:-}" ] || continue
-		case "$kind" in
-			brew)
-				case " $brew_skip " in
-					*" $name "*) ;;
-					*) brew_skip="${brew_skip:+$brew_skip }$name" ;;
-				esac
-				;;
-			cask)
-				case " $cask_skip " in
-					*" $name "*) ;;
-					*) cask_skip="${cask_skip:+$cask_skip }$name" ;;
-				esac
-				;;
-		esac
-		status reuse "$C_DIM" "$kind $name (already available outside Homebrew)"
-	done < <(external_brewfile_entries "$BREWFILE")
-	printf '  running brew bundle (this can take a while)...\n'
-	if HOMEBREW_BUNDLE_BREW_SKIP="$brew_skip" \
-		HOMEBREW_BUNDLE_CASK_SKIP="$cask_skip" \
-		brew bundle --file="$BREWFILE" </dev/null; then
-		changed "brew bundle completed"
-	else
-		fail "brew bundle reported errors" \
-			"Re-run 'brew bundle --file=$(display_path "$BREWFILE")' by hand to see which formula failed. Config installs above are unaffected."
-	fi
-	manual "Optional per-feature extras are not installed: brew bundle --file=\"$(display_path "$DOTFILES/Brewfile.optional")\"."
-	return 0
+		[ -n "$name" ] || continue
+		if pkg_present "$kind" "$name"; then
+			ok "$kind $name (available)"
+		elif [ "$DRY_RUN" -eq 1 ]; then
+			plan "brew install $([ "$kind" = cask ] && printf '%s ' --cask)$name"
+		elif ! command -v brew >/dev/null 2>&1; then
+			fail "Missing $name; install Homebrew or provide the dependency yourself."
+		elif [ "$kind" = cask ] && brew install --cask "$name" </dev/null; then
+			changed "$name installed"
+		elif [ "$kind" = brew ] && brew install "$name" </dev/null; then
+			changed "$name installed"
+		else
+			fail "Could not install $name"
+		fi
+	done < <(components_packages "$COMPONENT_ACTIVE")
 }
 
 phase_manifest() {
 	heading "manifest"
 	local manifest_file=${1:-$MANIFEST} source_root=${2:-$DOTFILES}
-	local group=${3:-general} src tgt strat note_text src_abs
+	local group=${3:-core} src tgt strat note_text src_abs
 
 	# Read the manifest on fd 3 so nothing inside the loop (git, curl, brew, jq)
 	# can swallow the rest of the file by reading stdin.
 	while IFS=$'\t' read -r src tgt strat note_text <&3 || [ -n "${src:-}" ]; do
-		# Section headers are the group names used by --only. A layer given a
-		# group (the private manifest) is one group, so its headers are cosmetic.
+		# A private manifest is one component; its headers are cosmetic.
 		case "$src" in
 			'# ---- '*' ----'*)
 				if [ -z "${3:-}" ]; then
@@ -875,14 +850,6 @@ phase_vim_plugins() {
 	return 0
 }
 
-# Vendored third-party skills: the skills CLI owns them as real directories in
-# ~/.agents/skills (manifest.tsv names them under "NOT rows"), updated with
-# `npx skills update`. This phase installs any that are missing, then links
-# every skill in ~/.agents/skills - vendored or from the manifest rows above -
-# into each tool's skills dir, and installs the gh extension the gh-stack skill
-# drives (the skill is inert without it).
-VENDORED_SKILLS="github/gh-stack@gh-stack vercel-labs/skills@find-skills"
-
 link_agent_skills() { # link_agent_skills <layer>... - dirs under ~/.agents
 	local layer dir name tool target
 	# Relative links, so ~/.agents and both tool dirs resolve to one SKILL.md.
@@ -891,12 +858,14 @@ link_agent_skills() { # link_agent_skills <layer>... - dirs under ~/.agents
 			[ -d "$dir" ] || continue
 			name="$(basename -- "$dir")"
 			for tool in claude codex; do
+				component_enabled "$tool" || continue
 				target="$HOME/.$tool/skills/$name"
 				if [ -e "$target" ] || [ -L "$target" ]; then
 					ok "$(display_path "$target")"
 				elif [ "$DRY_RUN" -eq 1 ]; then
 					plan "ln -s ../../.agents/$layer/$name $(display_path "$target")"
 				else
+					ensure_parent "$target" || continue
 					ln -s "../../.agents/$layer/$name" "$target"
 					changed "$(display_path "$target") -> ../../.agents/$layer/$name"
 				fi
@@ -907,29 +876,26 @@ link_agent_skills() { # link_agent_skills <layer>... - dirs under ~/.agents
 
 phase_agent_extras() {
 	heading "agent skills + gh extension"
-	local spec name dir tool target
+	local spec name
 	for spec in $VENDORED_SKILLS; do
 		name="${spec##*@}"
 		if [ -d "$HOME/.agents/skills/$name" ]; then
 			ok "vendored skill $name present"
-		elif ! command -v npx >/dev/null 2>&1; then
-			warn "npx not found; cannot install vendored skill $name"
-			manual "Install node, then run: npx -y skills add $spec -g --agent codex -y"
 		elif [ "$DRY_RUN" -eq 1 ]; then
-			plan "npx -y skills add $spec -g --agent codex -y"
-		elif npx -y skills add "$spec" -g --agent codex -y </dev/null; then
+			plan "npx -y skills add $spec -g --agent universal -y"
+		elif ! command -v npx >/dev/null 2>&1; then
+			fail "npx not found; provide Node.js and re-run agent-extras"
+		elif npx -y skills add "$spec" -g --agent universal -y </dev/null; then
 			changed "vendored skill $name installed from $spec"
 		else
 			fail "skills CLI could not install $name" \
-				"Re-run by hand: npx -y skills add $spec -g --agent codex -y"
+				"Re-run by hand: npx -y skills add $spec -g --agent universal -y"
 		fi
 	done
 
-	link_agent_skills skills skills.local
 
 	if ! command -v gh >/dev/null 2>&1; then
-		warn "gh not found; skipping the gh-stack extension"
-		manual "Install gh (it is in this repo's Brewfile), then run: gh extension install github/gh-stack"
+		fail "gh not found; provide GitHub CLI and re-run agent-extras"
 	elif gh extension list 2>/dev/null | grep -q 'github/gh-stack'; then
 		ok "gh extension gh-stack"
 	elif [ "$DRY_RUN" -eq 1 ]; then
@@ -937,51 +903,68 @@ phase_agent_extras() {
 	elif gh extension install github/gh-stack </dev/null; then
 		changed "gh extension gh-stack installed"
 	else
-		warn "gh extension install github/gh-stack failed (gh not authenticated?)"
+		fail "gh extension install github/gh-stack failed (gh not authenticated?)"
 		manual "Run 'gh auth login', then: gh extension install github/gh-stack"
 	fi
 	return 0
 }
 
+phase_mermaid() {
+	local directory="$HOME/.local/share/dotfiles/mermaid"
+	if [ -x "$directory/node_modules/.bin/mmdc" ]; then
+		ok "Mermaid CLI available"
+	elif [ "$DRY_RUN" -eq 1 ]; then
+		plan "npm install --prefix $(display_path "$directory")"
+	elif command -v npm >/dev/null 2>&1 && npm install --prefix "$directory" </dev/null; then
+		changed "Mermaid CLI installed"
+	else
+		fail "Mermaid setup needs npm; provide Node.js and re-run."
+	fi
+}
+
 # ----------------------------------------------------------------------- main
 
-printf '%sdotfiles install%s  repo: %s\n' "$C_BOLD" "$C_RESET" "$(display_path "$DOTFILES")"
-if [ "$DRY_RUN" -eq 1 ]; then
-	printf '%sdry run: nothing on disk will be modified.%s\n' "$C_YELLOW" "$C_RESET"
+printf 'dotfiles install  repo: %s\n' "$(display_path "$DOTFILES")"
+printf 'components: %s\n' "$COMPONENT_ACTIVE"
+[ "$DRY_RUN" -eq 0 ] || printf 'dry run: files, packages, and saved selection are unchanged.\n'
+if [ ! -f "$COMPONENT_SELECTION_FILE" ] && [ "$ACTION" = apply ]; then
+	printf 'No laptop selection yet. Use ./install.sh list, then ./install.sh install <components...>.\n'
 fi
-if [ -n "$ONLY" ]; then printf 'only: %s\n' "$ONLY"; fi
-
-# Directory creation is a prerequisite for nearly every row, so it runs for any
-# group - except the two that touch no target at all.
-case "$ONLY" in
-	brew|never) ;;
-	*) phase_dirs ;;
-esac
-
-if [ "$SKIP_BREW" -eq 1 ]; then
-	heading "homebrew"
-	skipped "brew bundle (--skip-brew)"
-elif want_group brew; then
-	phase_brew
+phase_dirs
+if [ "$SKIP_BREW" -eq 1 ]; then skipped "dependency installation (--skip-brew)"; else phase_brew; fi
+if want_group package-safety && [ "$DRY_RUN" -eq 0 ]; then
+	# shellcheck source=lib/package-safety.sh
+	. "$DOTFILES/lib/package-safety.sh"
+	package_script_approvals_supported || die "Update the package managers before enabling package-safety."
+	uv --config-file "$DOTFILES/config/package-safety/uv.toml" tool list >/dev/null ||
+		die "Update uv with its original installation method before enabling package-safety."
 fi
-
 phase_manifest
-
-if want_group private && [ -f "$DOTFILES/private/manifest.tsv" ]; then
-	phase_manifest "$DOTFILES/private/manifest.tsv" "$DOTFILES/private" private
-	if [ "$ONLY" = private ]; then link_agent_skills skills.local; fi
+if want_group package-safety; then
+	# shellcheck source=lib/package-safety.sh
+	. "$DOTFILES/lib/package-safety.sh"
+	if [ "$DRY_RUN" -eq 1 ]; then
+		plan "apply pnpm security settings through its CLI, if installed"
+	elif pnpm_security_config apply; then
+		ok "pnpm security settings applied (if installed)"
+	else
+		fail "Could not apply pnpm security settings"
+	fi
 fi
-
-if want_group agents; then
-	phase_agent_extras
+if want_group private; then
+	if [ -f "$DOTFILES/private/manifest.tsv" ]; then
+		phase_manifest "$DOTFILES/private/manifest.tsv" "$DOTFILES/private" private
+	else
+		fail "private selected, but private/manifest.tsv is missing on this laptop"
+	fi
 fi
-
-if [ "$SKIP_VIM_PLUGINS" -eq 1 ]; then
-	heading "vim plugins"
-	skipped "vim plugins (--skip-vim-plugins)"
-elif want_group vim-plugins; then
-	phase_vim_plugins
+if want_group agent-extras; then phase_agent_extras; fi
+if want_group skills || want_group claude || want_group codex || want_group agent-extras || want_group private; then
+	link_agent_skills skills skills.local
 fi
+if want_group vim-plugins; then phase_vim_plugins; fi
+if want_group mermaid; then phase_mermaid; fi
+if [ "$DRY_RUN" -eq 0 ] && [ "${#FAILURES[@]}" -eq 0 ]; then components_save; fi
 
 # ------------------------------------------------------------------- epilogue
 
@@ -1005,7 +988,7 @@ if [ ${#MANUAL[@]} -gt 0 ]; then
 		say_step "$m"
 	done
 fi
-say_step "Open a new terminal (or run 'exec zsh'). ~/.zshenv and ~/.zshrc are only read by a fresh shell - in particular the eza stdin guard in ~/.zshenv, which is what keeps non-interactive and agent shells from hanging forever."
+if want_group shell; then say_step "Open a new terminal to load the selected shell integrations."; fi
 
 if [ ${#FAILURES[@]} -gt 0 ]; then
 	printf '\n%s%d step(s) failed:%s\n' "$C_RED" "${#FAILURES[@]}" "$C_RESET" >&2

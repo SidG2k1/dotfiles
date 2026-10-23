@@ -1,7 +1,7 @@
 # Laptop setup
 
-Run in order. Steps 1–2 are scripted; everything after exists because a script
-cannot do it — it needs a password, a GUI toggle, or a decision.
+Choose the components this laptop needs, then complete the relevant manual
+steps below.
 
 ## 1. Prerequisites
 
@@ -10,11 +10,10 @@ xcode-select --install
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 
 git clone https://github.com/SidG2k1/dotfiles.git ~/dotfiles
-brew bundle --file=~/dotfiles/Brewfile.optional     # per-feature extras; read it first
 ```
 
-`Brewfile.optional` also carries the Ghostty and VS Code casks, since this repo
-installs configs for both.
+Homebrew is needed only to install missing packages. With dependencies supplied
+another way, use `--skip-brew`.
 
 Homebrew's `shellenv` line goes in `~/.zprofile` or `~/.zshenv` **by hand** — the
 repo does not install `~/.zprofile`, because other tools' installers append to it
@@ -27,14 +26,61 @@ in step 5. Skip it otherwise.
 
 ```sh
 cd ~/dotfiles
-./install.sh --dry-run   # prints the plan: every target, its strategy, and what it will do
-./install.sh
-bin/dotfiles-doctor      # verifies each target landed and each dependency resolves
+./install.sh list
+./install.sh plan shell git vim     # example: choose your own components
+./install.sh install shell git vim
+bin/dotfiles-doctor
 ```
 
-Idempotent, and safe to re-run after every `git pull`. Fix what `dotfiles-doctor`
-reports before moving on — most of the troubleshooting section below is things it
-catches for you.
+Future `./install.sh` runs apply this laptop's saved choices. Add components with
+`install`; replace the choices with `select`. Removing a choice leaves its
+existing files and packages in place. On a fresh laptop, a bare invocation
+installs only the doctor helper. See `README.md` for where choices are saved.
+
+Harness preferences (`claude`, `codex`, `opencode`), shared instructions
+(`agent-shared`), personal skills (`skills`), and third-party skills plus
+gh-stack (`agent-extras`) can be selected separately. Required components are
+included automatically; `list` shows those relationships. Harness applications
+and sign-in are separate manual steps.
+
+### Package install safeguards
+
+Enable the shared package-manager defaults on each laptop:
+
+```sh
+./install.sh install package-safety
+bin/dotfiles-doctor --strict
+```
+
+The policy lives in [config/package-safety](config/package-safety). pnpm is
+configured through its own CLI because its config format varies by version.
+Update older package managers if they cannot read these settings; the installer
+checks script-approval support before changing defaults, and the doctor checks
+uv's cooldown support. Registry credentials stay local.
+
+Release delays give time for compromises to be discovered; they do not certify
+packages as safe. Project settings and command-line flags can override these
+user defaults, and existing installs and lockfiles are not rescanned. Approve
+reviewed dependency builds with `pnpm approve-builds` or `bun pm trust <package>`.
+Bun also retains its built-in trusted-package list. Keep approvals in the project.
+The project's own lifecycle scripts can run, so review an unfamiliar project's
+scripts before installing dependencies.
+
+npm rejects unapproved dependency scripts before installation. To inspect and
+approve a dependency for the first time, stage it with scripts skipped:
+
+```sh
+npm install --ignore-scripts
+npm install-scripts ls
+npm install-scripts approve <package>
+npm rebuild <package>
+```
+
+Keep macOS security updates enabled separately in System Settings. On current
+macOS, check General → Software Update → Automatic Updates and Privacy & Security
+→ [Background Security Improvements](https://support.apple.com/guide/mac-help/mchl44c4c70c/mac).
+Docker image digests, editor extensions, and standalone downloads need their own
+source and update choices; these defaults do not cover them.
 
 ## 3. Identity, auth, and other human-only steps
 
@@ -73,6 +119,56 @@ do code --install-extension "$extension"; done
   reverse scrolling is switched on in its own preferences, vertical and
   horizontal separately. Its settings live in a plist that `cfprefsd` owns and
   rewrites, so no tracked file can set them.
+
+### Baseten router
+
+The router and each client integration are independent choices. Install the
+router without changing any harness settings:
+
+```sh
+./install.sh install router
+~/.local/bin/baseten-router --setup
+```
+
+`--setup` installs the proxy runtime with known compromised releases excluded,
+without starting it. Authentication and client sessions are separate from
+installation.
+
+If you use 1Password, install its CLI, sign in, and create
+`~/.config/litellm/env` with your item's name or ID:
+
+```sh
+BASETEN_OP_ITEM="Baseten"
+```
+
+The item must hold the provider API key in its password field. Keep this file
+local and run `chmod 600 ~/.config/litellm/env`. An exported `BASETEN_API_KEY`
+takes precedence and works without 1Password. No credentials need to be copied
+from the other laptop.
+
+Start the proxy in one terminal:
+
+```sh
+~/.local/bin/baseten-router
+```
+
+Choose either client integration independently; the client applications must
+already be installed. In another terminal, install and use the Claude profile:
+
+```sh
+./install.sh install router-claude
+claude --settings "$HOME/.config/litellm/claude.json"
+```
+
+For OpenCode, register the provider and select it for a session:
+
+```sh
+./install.sh install router-opencode
+opencode --model litellm/baseten-router
+```
+
+Neither integration changes the client's default model. Both profiles use port
+4000. Model routing and pricing live in [the router config](config/litellm/baseten.yaml).
 
 ## 4. What must never enter this repo
 
@@ -152,8 +248,8 @@ Facts worth knowing before you debug something that is not broken:
 **vim** loads the plugins listed in `vim/plugins.txt` as native packages from
 `~/.vim/pack/bundle/start/` (`:help packages`), with no plugin manager. Without
 them vim still works, but every plugin-backed feature is silently inert, which is
-harder to diagnose than an error. `install.sh` clones them; `dotfiles-doctor`
-reports any that are missing and warns on a leftover pre-native-packages
+harder to diagnose than an error. `./install.sh install vim-plugins` clones them;
+`dotfiles-doctor` reports any that are missing and warns on a leftover pre-native-packages
 `~/.vim/bundle`.
 
 ## 7. Optional Ghostty appearance
@@ -170,8 +266,7 @@ leaves the Markdown unchanged. It requires `uv` and the pinned npm dependency
 installed by this optional setup step:
 
 ```sh
-./install.sh --only scripts
-npm install --prefix "$HOME/.local/share/dotfiles/mermaid" --no-audit --no-fund
+./install.sh install mermaid
 mermaid-check path/to/document.md
 ```
 
@@ -183,12 +278,12 @@ its sources. The npm install may download a headless browser.
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `ls` or `cat` fails in every shell | they are aliased to `eza`/`bat`; the alias needs the tool | `brew bundle --file=Brewfile`. The aliases are defined only when the binary exists, so a stale `~/.zshrc` predating that guard is the other possibility — re-run `./install.sh` |
+| `ls` or `cat` fails in every shell | they are aliased to `eza`/`bat`; the alias needs the tool | `./install.sh install shell`. The aliases are defined only when the binary exists, so a stale `~/.zshrc` predating that guard is the other possibility — re-run `./install.sh` |
 | A command using `eza` hangs forever, with no output | eza ≥0.23 reads **stdin** for paths when stdout is not a TTY and never returns if given no path argument. Agent, CI, and `$(…)` shells hit this | the guard lives in `~/.zshenv`, which every zsh reads — `.zshrc` is interactive-only and cannot fix it. Verify `~/.zshenv` is installed |
 | `eza --icons .` → `invalid value '.' for '--icons [<WHEN>]'` | `--icons` takes an *optional* value in eza ≥0.23, so it swallows the next argument | spell the value — `--icons=auto`, which also correctly drops icons when piped — or terminate flags with `-- .`. The tracked `ls`/`la`/`ll`/`lt` aliases and the `~/.zshenv` guard use these respectively; a bare `--icons` anywhere is the bug |
 | vim opens fine but `;th`, `:Tabularize`, ALE, and airline do nothing | the plugins are not in `~/.vim/pack/bundle/start/` — not cloned, or still in the old pathogen `~/.vim/bundle` location, which native-package vim never reads | see step 6 |
 | Every `git diff` / `git show` / `git add -p` errors | `core.pager = delta` and `delta` is not installed | `brew install git-delta` |
 | Every commit fails with a signing error | your `~/.gitconfig.local` sets `commit.gpgsign = true` but the signer or key is unavailable on this machine | fix the signer path and key in `~/.gitconfig.local`, or unset `commit.gpgsign` there |
-| Claude Code status line shows the directory but no model, context, or rate limits | `~/.claude/statusline.sh` reads its JSON stdin with `jq`, so without `jq` only the git-derived parts render | `brew install jq` (it is in `Brewfile`) |
-| Glyphs render as tofu boxes | no Nerd Font | `brew bundle --file=Brewfile` installs it; then select it in the terminal |
+| Claude Code status line shows the directory but no model, context, or rate limits | `~/.claude/statusline.sh` reads its JSON stdin with `jq`, so without `jq` only the git-derived parts render | `./install.sh install claude` |
+| Glyphs render as tofu boxes | no Nerd Font | `./install.sh install fonts`; then select it in the terminal |
 | Ghostty logs "unknown key" on start | that key is not in your Ghostty version | remove it from the `# >>> dotfiles` block; only append keys the installed version accepts |

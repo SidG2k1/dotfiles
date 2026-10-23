@@ -13,16 +13,38 @@ Everything degrades gracefully: a missing tool costs a feature, never `ls`,
 ```sh
 git clone https://github.com/SidG2k1/dotfiles.git ~/dotfiles
 cd ~/dotfiles
-./install.sh                         # idempotent; --dry-run prints the plan
-bin/dotfiles-doctor                  # verifies every install landed + deps resolve
+./install.sh list                    # available components; * marks saved choices
+./install.sh plan shell git          # preview a selection
+./install.sh install shell git       # install and remember it
+bin/dotfiles-doctor                  # check this laptop's selected components
 ```
 
-`install.sh` runs `brew bundle --file=Brewfile` itself (`--skip-brew` opts out);
-the per-feature extras in `Brewfile.optional` are the one dependency step it
-leaves to you. It never overwrites a file it does not own — see the strategies
-below for why that distinction exists.
+All components are optional except `core`, which installs the doctor helper.
+The installer supplies missing packages for the components you choose, reusing
+tools already on PATH. Use `--skip-brew` to provide dependencies yourself.
+
+After a `git pull`, run `./install.sh plan`, then `./install.sh` to update the
+saved selection. `install <components...>` adds choices;
+`select <components...>` replaces the selection without installing anything.
+Neither removes existing files or packages. Choices live in
+`${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/components`, separately on each laptop.
+Copy that file if you want the same choices elsewhere, or start with a smaller
+selection on a work machine.
+
+Run `./install.sh list` for component descriptions and dependencies, or
+`./install.sh --help` for command syntax. Shell integrations such as Atuin,
+direnv, and Starship activate only when selected. The Claude, Codex, and OpenCode
+components configure existing client installations; install and authenticate
+those applications separately. GUI components such as `ghostty` and `vscode`
+also install their applications through Homebrew.
 
 Then do the parts a script cannot: `setup.md`.
+
+## Baseten router
+
+The local proxy and its Claude Code and OpenCode profiles are separate opt-in
+components. [Set them up on another laptop](setup.md#baseten-router);
+credentials stay machine-local, and the profiles preserve each client's default model.
 
 ## Install strategies
 
@@ -48,12 +70,12 @@ breaks if the strategy is wrong, and what is deliberately *not* installed.
 ## Machine-local layer
 
 Private configuration can live under gitignored `private/`. If
-`private/manifest.tsv` exists, the installer applies it after the public manifest;
-its source paths are relative to `private/`. `./install.sh --only private`
-installs that layer alone. Targets may overlap the public manifest for
+`private/manifest.tsv` exists, `./install.sh install private` applies it after
+the public manifest and remembers that choice. Its source paths are relative
+to `private/`. Targets may overlap the public manifest for
 complementary `merge-json` or `merge-toml` subsets; other targets must be distinct.
-The doctor checks both manifests and optional executable names in
-`private/executables.txt`.
+The doctor checks the private manifest and optional executable names in
+`private/executables.txt` only when `private` is selected.
 
 Rule of thumb: **if a statement could be false on another machine, it goes in a
 `.local` file.** Machine truth is not portable config, and asserting it in a
@@ -71,7 +93,7 @@ Every seam is untracked, optional, and absent-safe.
 | `~/.ssh/config.local` | optional `Include` in the managed SSH block | private identity-agent settings and per-host blocks |
 | `~/.vim/after/plugin/zz-local.vim` | vim's `after/plugin` load path | per-box overrides that must win over plugin defaults |
 | `~/.agents/AGENTS.local.md` | shared instructions explicitly ask agents to read it when present | private or machine-specific guidance; may link into `private/agents/` |
-| `~/.agents/skills.local/<name>/SKILL.md` | symlinked into both agent tools | private skills; the directory may link into `private/agents/skills/` — see `agents/SKILLS.md` |
+| `~/.agents/skills.local/<name>/SKILL.md` | symlinked into selected harnesses | private skills; the directory may link into `private/agents/skills/` — see `agents/SKILLS.md` |
 
 ```sh
 # ~/.zshrc.local
@@ -99,11 +121,10 @@ Tectonic is installed for latex.
 
 ## External dependencies
 
-`Brewfile` is annotated per package with what it backs and what degrades without
-it; `Brewfile.optional` is the per-feature extras; `vim/plugins.txt` is the same
-for vim. `bin/dotfiles-doctor` reports what is missing, and the troubleshooting
-table in `setup.md` covers the failures that do not name their cause — a vim
-whose plugin features are silently inert, or `eza` hanging in a non-TTY shell.
+Package dependencies belong to components in `components.tsv`; Vim plugins
+are listed in `vim/plugins.txt` and downloaded only with `vim-plugins`.
+`bin/dotfiles-doctor` reports selected dependencies that are missing. The
+troubleshooting table in `setup.md` covers less obvious failures.
 
 ## Safety
 

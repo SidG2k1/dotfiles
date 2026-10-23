@@ -1,0 +1,80 @@
+#!/bin/sh
+set -eu
+
+fail() { printf 'baseten-router: %s\n' "$*" >&2; exit 1; }
+
+[ "$#" -le 1 ] || fail "usage: baseten-router [--setup|--help]"
+case "${1:-}" in
+  --setup)
+    command -v uv >/dev/null 2>&1 || fail "uv is required; install it first."
+    exec uv tool install --python 3.12 --with 'rich==13.9.4' 'litellm[proxy]!=1.82.7,!=1.82.8,!=1.107.0'
+    ;;
+  -h|--help)
+    cat <<'EOF'
+Usage: baseten-router [--setup|--help]
+
+--setup installs LiteLLM with known compromised releases excluded.
+Set BASETEN_API_KEY, or set BASETEN_OP_ITEM in ~/.config/litellm/env
+to read the password field of a 1Password item. XDG_CONFIG_HOME is respected.
+BASETEN_ROUTER_PORT overrides port 4000; BASETEN_ROUTER_LOG sets the log level.
+EOF
+    exit 0
+    ;;
+  '') ;;
+  *) fail "usage: baseten-router [--setup|--help]" ;;
+esac
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/litellm"
+CONFIG="$CONFIG_DIR/baseten.yaml"
+PORT="${BASETEN_ROUTER_PORT:-4000}"
+
+# litellm silently rebinds to a random port when 4000 is taken, which leaves
+# clients pointed at the :4000 config still talking to a stale process.
+if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+  echo "baseten-router: port $PORT is already in use:" >&2
+  lsof -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | while read -r pid; do
+    echo "  pid $pid  $(ps -o command= -p "$pid" 2>/dev/null)" >&2
+  done
+  exit 1
+fi
+
+command -v uv >/dev/null 2>&1 || fail "uv is required; install it first."
+LITELLM_HOME="$(uv tool dir)/litellm"
+[ -x "$LITELLM_HOME/bin/litellm" ] && [ -x "$LITELLM_HOME/bin/python" ] ||
+  fail "LiteLLM is missing. Run: baseten-router --setup"
+[ -r "$CONFIG" ] || fail "Config is missing. Run install.sh --only router from your dotfiles checkout."
+
+if [ -z "${BASETEN_API_KEY:-}" ]; then
+  if [ -r "$CONFIG_DIR/env" ]; then
+    # shellcheck source=/dev/null
+    . "$CONFIG_DIR/env"
+  fi
+  if [ -z "${BASETEN_API_KEY:-}" ] && [ -n "${BASETEN_OP_ITEM:-}" ]; then
+    command -v op >/dev/null 2>&1 || fail "1Password CLI (op) is required for BASETEN_OP_ITEM."
+    BASETEN_API_KEY=$(op item get "$BASETEN_OP_ITEM" --fields password --reveal)
+  fi
+fi
+[ -n "${BASETEN_API_KEY:-}" ] ||
+  fail "Set BASETEN_API_KEY or configure BASETEN_OP_ITEM in $CONFIG_DIR/env."
+
+export BASETEN_API_KEY
+export LITELLM_LOG="${BASETEN_ROUTER_LOG:-INFO}"
+export LITELLM_DONT_SHOW_FEEDBACK_BOX=true
+
+# The proxy reports only the model group alias, identical for every deployment,
+# so name the deployments here.
+"$LITELLM_HOME/bin/python" - "$CONFIG" "$PORT" <<'PY'
+import sys, yaml
+
+config, port = sys.argv[1], sys.argv[2]
+models = yaml.safe_load(open(config))["model_list"]
+print(f"baseten-router on 127.0.0.1:{port}")
+for m in models:
+    info, params = m.get("model_info") or {}, m["litellm_params"]
+    print(f"  order {params.get('order', '-'):<2} {info.get('id', '?'):<34} {params['model']}")
+PY
+
+exec "$LITELLM_HOME/bin/litellm" \
+  --config "$CONFIG" \
+  --host 127.0.0.1 \
+  --port "$PORT"

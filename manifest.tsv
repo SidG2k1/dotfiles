@@ -15,7 +15,7 @@
 #             append-once  idempotent marker-delimited block appended; the rest
 #                          of the target is left untouched
 #             merge-json   jq merge of the tracked key subset into existing JSON
-#             merge-toml   merge of tracked single-line top-level TOML keys into
+#             merge-toml   merge of tracked scalar TOML keys and named tables into
 #                          the existing file (lib/merge-toml.py; requires uv)
 #             never        not installed by this repo; the note says who owns the
 #                          target and what overwriting it would break. The source
@@ -27,35 +27,52 @@
 # Every install must degrade gracefully: a missing tool may cost a feature, it
 # may never break ls, cat, cd, git, or shell startup.
 #
-# Section headers (# ---- name ----) are the group names install.sh --only takes.
+# Section headers (# ---- name ----) name components from components.tsv.
 
+
+# Components and their dependencies are declared in components.tsv; only core is enabled initially.
+
+# ---- core ----
+bin/dotfiles-doctor	~/bin/dotfiles-doctor	link	zshrc puts ~/bin at the front of PATH, and the script resolves its own symlink chain back to the clone, so the copy on PATH always audits this checkout. It writes nothing to the machine or the repo. git is needed to enumerate tracked files for the leak scan; jq only to verify the merge-json rows.
+
+# ---- package-safety ----
+config/package-safety/npmrc	~/.npmrc	append-once	Preserve local registry credentials outside the managed block.
+config/package-safety/uv.toml	~/.config/uv/uv.toml	merge-toml	Preserve private indexes and unrelated preferences; requires uv with duration-based exclude-newer support.
+config/package-safety/bunfig.toml	~/.bunfig.toml	merge-toml	Preserve local registry credentials and unrelated Bun settings.
+config/package-safety/brew.env	~/.homebrew/brew.env	append-once	Homebrew reads this file directly, including outside interactive shells; attestation verification requires gh.
+config/package-safety/pnpm.json	~/.config/dotfiles/pnpm-security.json	link	The installer applies this policy through pnpm's CLI to preserve credentials across its INI and YAML formats.
 
 # ---- shell ----
 zshenv	~/.zshenv	link	Every zsh reads ~/.zshenv - interactive, non-interactive, script, agent, CI - so guards that must always apply live here. The eza stdin guard belongs here, not in zshrc: eza >=0.23 reads stdin for paths when stdout is not a TTY and hangs forever with no path argument, and .zshrc is never sourced by an agent or CI shell.
 zshrc	~/.zshrc	wrap	~/.zshrc becomes a stub that sources $DOTFILES/zshrc, then ~/.zshrc.local if it exists. Machine-specific PATH entries, work aliases, and anything secret-adjacent stay in the untracked .local file and out of this public repo.
 
+# ---- git ----
+gitconfig	~/.gitconfig	include	Add [include] path = $DOTFILES/gitconfig to a user-owned ~/.gitconfig, and keep identity in ~/.gitconfig.local (also included). A symlink here destroys the machine's user.email, user.signingkey, and any [filter "lfs"] block written by git-lfs install.
+config/git/ignore	~/.config/git/ignore	link	Global gitignore. Git ships no default file at this path, so a symlink cannot clobber user content.
+
+# ---- github-ssh ----
+config/ssh/github.conf	~/.ssh/config	append-once	Manage only GitHub's existing SSH-over-443 block; preserve local identity settings and tool-owned includes outside the block.
+
 # ---- vim ----
 vimrc	~/.vimrc	link	Repo owns the file. The plugins in vim/plugins.txt must be cloned into ~/.vim/pack/bundle/start/ (vim 8+ native packages); missing ones cost their features silently, nothing errors.
 vim/templates	~/.vim/templates	link	Directory symlink. The BufNewFile autocmds in vimrc read ~/.vim/templates/skeleton.* by absolute path, so the whole directory must resolve, not individual files.
 
-# ---- terminal ----
-config/ghostty/appearance.ghostty	~/.config/ghostty/appearance.ghostty	link	Optional existing appearance preset; install it without overriding the active terminal's per-display settings.
+# ---- prompt ----
 config/starship.toml	~/.config/starship.toml	link	Prompt config only. Nothing breaks when starship is absent because zshrc guards its init behind command -v. Provides the repo-root-relative path display (truncation_length=0 with starship's default truncate_to_repo) that the agent status lines also want.
+
+# ---- history ----
+config/atuin/config.toml	~/.config/atuin/config.toml	link	Portable search preferences; history and authentication remain in Atuin's own storage.
+
+# ---- ghostty ----
+config/ghostty/appearance.ghostty	~/.config/ghostty/appearance.ghostty	link	Optional existing appearance preset; install it without overriding the active terminal's per-display settings.
 config/ghostty/config.ghostty	~/.config/ghostty/config	append-once	Both the tool and the human edit this file, so append a marker-delimited block (# >>> dotfiles managed block >>>) and rewrite only that region. IMPORTANT: ghostty loads BOTH ~/.config/ghostty/config and ~/.config/ghostty/config.ghostty, and config.ghostty is read LAST - verified by setting the same key in both, where config.ghostty won. Keep exactly one of them. A leftover config.ghostty silently overrides this managed block. Ghostty logs an error per unrecognized key, so only append keys the installed version accepts.
 
-# ---- git ----
-config/ssh/github.conf	~/.ssh/config	append-once	Manage only GitHub's existing SSH-over-443 block; preserve local identity settings and tool-owned includes outside the block.
-gitconfig	~/.gitconfig	include	Add [include] path = $DOTFILES/gitconfig to a user-owned ~/.gitconfig, and keep identity in ~/.gitconfig.local (also included). A symlink here destroys the machine's user.email, user.signingkey, and any [filter "lfs"] block written by git-lfs install.
-config/git/ignore	~/.config/git/ignore	link	Global gitignore. Git ships no default file at this path, so a symlink cannot clobber user content.
-
-# ---- agents ----
+# ---- agent-shared ----
 agents/AGENTS.md	~/.agents/AGENTS.md	link	Canonical shared instructions. Portable statements only: machine-specific environment claims (which TeX engine, which model runtime, which GPU) belong in an untracked ~/.agents/AGENTS.local.md, because asserting a tool exists on a fresh machine sends agents down dead ends.
-agents/AGENTS.md	~/.claude/CLAUDE.md	link	Second symlink to the same file so Claude Code reads one source of truth. Point it at ~/.agents/AGENTS.md, not at $DOTFILES, so the repo can move.
-agents/AGENTS.md	~/.codex/AGENTS.md	link	Third symlink to the same file for Codex. Same indirection through ~/.agents/AGENTS.md.
-agents/AGENTS.md	~/.config/opencode/AGENTS.md	link	Fourth symlink to the same file for OpenCode: its global instructions path is fixed at ~/.config/opencode/AGENTS.md and it follows neither CLAUDE.md nor ~/.agents/AGENTS.md. Same indirection through ~/.agents/AGENTS.md.
 agents/SKILLS.md	~/.agents/SKILLS.md	link	Skills-system design doc: the two layers, how to add a skill, and the frontmatter keys each tool honors. Absolute link, same shape as the skills themselves.
-agents/SKILLS.md	~/.claude/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
-agents/SKILLS.md	~/.codex/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
+agents/reference	~/.agents/reference	link	Directory symlink. AGENTS.md sends agents to ~/.agents/reference/transcription.md by absolute path, so the directory has to resolve - without this row that pointer is a dead end on every machine. Runbooks only: no machine state, no credentials.
+
+# ---- skills ----
 agents/skills/agentish-to-english	~/.agents/skills/agentish-to-english	link	Personal skill: translate agent-generated prose into plain, direct English.
 agents/skills/anti-slop	~/.agents/skills/anti-slop	link	Personal skill: keep agent-authored code changes minimal, idiomatic, and within scope.
 agents/skills/autopush	~/.agents/skills/autopush	link	Personal skill: stage selectively, commit, push, refresh the PR body.
@@ -77,50 +94,64 @@ agents/skills/subagent-driven-development	~/.agents/skills/subagent-driven-devel
 agents/skills/dispatching-parallel-agents	~/.agents/skills/dispatching-parallel-agents	link	Forked from superpowers 6.2.0: fan independent tasks out to parallel agents.
 agents/skills/receiving-code-review	~/.agents/skills/receiving-code-review	link	Forked from superpowers 6.2.0: verify review feedback technically before implementing it.
 agents/skills/i-have-adhd	~/.agents/skills/i-have-adhd	link	Adapted from ayghri/i-have-adhd 0.2.0 (MIT): opt-in /i-have-adhd output shaping for long multi-step sessions. disable-model-invocation and agents/openai.yaml keep it explicit-only in both tools; the upstream always-on hook is deliberately not installed.
-agents/reference	~/.agents/reference	link	Directory symlink. AGENTS.md sends agents to ~/.agents/reference/transcription.md by absolute path, so the directory has to resolve - without this row that pointer is a dead end on every machine. Runbooks only: no machine state, no credentials.
+
+# ---- claude ----
+agents/AGENTS.md	~/.claude/CLAUDE.md	link	Second symlink to the same file so Claude Code reads one source of truth. Point it at ~/.agents/AGENTS.md, not at $DOTFILES, so the repo can move.
+agents/SKILLS.md	~/.claude/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
 agents/claude/settings.json	~/.claude/settings.json	merge-json	Claude Code writes this file itself (plugin enable/disable, dismissed prompts, marketplace paths), so merge the tracked key subset with jq rather than linking. The statusLine command runs agents/claude/statusline.sh, which needs jq: without it the status line shows only the directory.
 agents/claude/statusline.sh	~/.claude/statusline.sh	link	statusLine script referenced by settings.json. Caches the gh PR lookup under ~/.cache/claude-statusline.
-agents/codex/preferences.toml	~/.codex/config.toml	merge-toml	Codex rewrites this file in place, adding installation-specific marketplace paths, MCP servers, and project trust, so merge only the tracked top-level preference keys (lib/merge-toml.py; requires uv). Linking or overwriting it drops that state. Model and context-size keys are left to each laptop.
 
-# ---- tools ----
-config/atuin/config.toml	~/.config/atuin/config.toml	link	Portable search preferences; history and authentication remain in Atuin's own storage.
-config/opencode/cli.json	~/.config/opencode/cli.json	merge-json	Manage the existing UI preference subset; app-owned debug and experimental settings survive the merge, and provider configuration stays private.
+# ---- codex ----
+agents/codex/preferences.toml	~/.codex/config.toml	merge-toml	Codex rewrites this file in place, adding installation-specific marketplace paths, MCP servers, and project trust, so merge only the tracked top-level preference keys (lib/merge-toml.py; requires uv). Linking or overwriting it drops that state. Model and context-size keys are left to each laptop.
+agents/AGENTS.md	~/.codex/AGENTS.md	link	Third symlink to the same file for Codex. Same indirection through ~/.agents/AGENTS.md.
+agents/SKILLS.md	~/.codex/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
+
+# ---- opencode ----
+agents/AGENTS.md	~/.config/opencode/AGENTS.md	link	Fourth symlink to the same file for OpenCode: its global instructions path is fixed at ~/.config/opencode/AGENTS.md and it follows neither CLAUDE.md nor ~/.agents/AGENTS.md. Same indirection through ~/.agents/AGENTS.md.
+config/opencode/cli.json	~/.config/opencode/cli.json	merge-json	Manage the existing UI preference subset; app-owned debug and experimental settings survive the merge.
 config/opencode/opencode.json	~/.config/opencode/opencode.json	merge-json	Shared settings and permission rules; jq merge so each laptop keeps its own model and agents.title.model. Provider credentials stay in OpenCode's auth store; the @jevvy/permissions plugin reads ~/.config/jevvy/jevvy.jsonc, which holds an API key and stays in the private manifest.
+
+# ---- gh ----
 config/gh/config.yml	~/.config/gh/config.yml	link	gh rewrites this file on `gh config set` and on schema migrations, so with a symlink those edits land in the repo working tree - visible in git status, never lost. Credentials stay in the sibling hosts.yml, which is gitignored and never installed.
+
+# ---- vscode ----
 config/vscode/settings.json	~/Library/Application Support/Code/User/settings.json	merge-json	VS Code writes this file from its own settings UI and extensions add keys to it. A symlink would let the UI edit the repo and reformat or drop keys, so jq-merge the tracked subset instead.
-config/yt-dlp/config	~/.config/yt-dlp/config	link	yt-dlp never writes its own config file. The options assume ffmpeg and a node JS runtime; a missing one fails an individual download rather than the shell. Only meaningful with yt-dlp installed (Brewfile.optional).
-config/gnupg/common.conf	~/.gnupg/common.conf	link	Create ~/.gnupg with mode 700 first or gpg refuses to use it. Only relevant when gnupg is installed (Brewfile.optional); harmless otherwise.
+
+# ---- docker ----
 config/docker/daemon.json	~/.docker/daemon.json	merge-json	Docker Desktop rewrites this file from its Settings UI, so merge keys instead of linking. Note builder.gc.defaultKeepStorage is deprecated in favour of a builder.gc.policy array; keep the tracked keys current or Docker warns on start.
 
-# ---- scripts ----
+# ---- gnupg ----
+config/gnupg/common.conf	~/.gnupg/common.conf	link	Create ~/.gnupg with mode 700 first or gpg refuses to use it. Only relevant when gnupg is installed; harmless otherwise.
+
+# ---- media ----
+config/yt-dlp/config	~/.config/yt-dlp/config	link	yt-dlp never writes its own config file. The options assume ffmpeg and a node JS runtime; a missing one fails an individual download rather than the shell. Only meaningful with yt-dlp installed.
 bin/yt-captions	~/bin/yt-captions	link	Needs uv and Node.js; uv supplies the Python dependencies from inline script metadata.
+
+# ---- mermaid ----
 bin/mermaid-check	~/bin/mermaid-check	link	Render Mermaid blocks from Markdown without editing the input; needs uv and the optional pinned Mermaid CLI described in setup.md.
 config/mermaid/package.json	~/.local/share/dotfiles/mermaid/package.json	link	Pinned optional Mermaid CLI dependency; install with npm in this directory when diagram checking is needed.
-bin/dotfiles-doctor	~/bin/dotfiles-doctor	link	zshrc puts ~/bin at the front of PATH, and the script resolves its own symlink chain back to the clone, so the copy on PATH always audits this checkout. It writes nothing to the machine or the repo. git is needed to enumerate tracked files for the leak scan; jq only to verify the merge-json rows.
+
+# ---- orca ----
 bin/orcw	~/bin/orcw	link	zshrc puts ~/bin at the front of PATH. Bash launcher that resolves its symlink chain back to the clone and runs lib/orcw.py under uv (falls back to python3). Needs the orca CLI on PATH and the Orca app running; `orcw doctor` reports what the installed Orca version lacks.
+
+# ---- alttab ----
 bin/rebuild-alttab	~/bin/rebuild-alttab	link	zshrc puts ~/bin at the front of PATH. Self-contained bash; override the checkout location with ALTTAB_SRC. Needs full Xcode selected, not just the Command Line Tools.
+
+# ---- macos-defaults ----
 bin/macos-defaults	~/bin/macos-defaults	link	zshrc puts ~/bin at the front of PATH. Run by hand; installing it changes no setting, and the defaults it writes need a logout to apply.
+
+# ---- router ----
+bin/baseten-router	~/.local/bin/baseten-router	link	Optional local proxy; --setup installs its runtime. Provider credentials stay in the environment or private local config.
+config/litellm/baseten.yaml	~/.config/litellm/baseten.yaml	link	Model routing and prices; the provider API key is an environment reference.
+config/litellm/baseten_metrics.py	~/.config/litellm/baseten_metrics.py	link	Request metrics callback loaded alongside the router config.
+
+# ---- router-claude ----
+config/litellm/claude.json	~/.config/litellm/claude.json	link	Optional Claude Code profile, selected with --settings; leaves the app-owned settings file alone.
+
+# ---- router-opencode ----
+config/opencode/preferences.json	~/.config/opencode/opencode.json	merge-json	Register the local proxy provider; preserve the default model and unrelated providers and settings.
 
 # ---- never ----
 zprofile	~/.zprofile	never	On a real machine this target is owned by other tools' installers - Homebrew shellenv, container and VM shell hooks, toolchain env snippets - which append to it and rewrite it on upgrade. Overwriting silently removes working integrations. Add the brew shellenv line by hand, or keep it in ~/.zshenv.
 profile	~/.profile	never	Same ownership problem: installer-generated env hooks live here (the uv / rust-toolchain `. $HOME/.local/bin/env` line is exactly one of them) and are regenerated on upgrade. Overwriting silently removes working integrations.
 config/fish/conf.d/uv.env.fish	~/.config/fish/conf.d/uv.env.fish	never	Generated by uv's own installer alongside ~/.local/bin/env.fish and recreated on upgrade. Rerun the uv installer instead of linking; no copy is tracked here (a tracked copy of installer output only rots).
-
-# NOT rows in this manifest, on purpose:
-#
-#   agents/skill-lock.json    Generated machine state - install timestamps,
-#                             last-selected agent list, dismissed prompts. It is
-#                             not a config to install, and it should not be
-#                             tracked at all.
-#   ~/.claude/skills/<name>, ~/.codex/skills/<name>
-#                             install.sh links every directory under
-#                             ~/.agents/skills/ into both tool dirs, so each
-#                             personal skill needs only its ~/.agents row above.
-#   ~/.agents/skills/gh-stack, find-skills, orca-linear, orchestration
-#                             Vendored third-party skills. The skills CLI
-#                             installs and updates them from upstream as real
-#                             dirs in ~/.agents/skills/ (not in this repo).
-#   vim/plugins.txt           Input to the installer, not an installed file: the
-#                             plugin list it clones into ~/.vim/pack/bundle/start.
-#   Brewfile, Brewfile.optional, README.md, setup.md, this file
-#                             Repo documentation and bootstrap inputs.

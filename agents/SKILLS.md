@@ -33,7 +33,7 @@ false on another machine.
 `~/.agents/AGENTS.local.md` — see **Machine-local layer** in `~/dotfiles/README.md`. The naming
 carries the signal — a real directory under `skills.local/` is deliberate; a real directory under
 `~/.agents/skills/` or in a tool's skills dir is a mistake, except the vendored skills the skills CLI
-installs there (listed in `~/dotfiles/manifest.tsv` under *"NOT rows in this manifest, on purpose"*).
+installs there (see `agent-extras` in `~/dotfiles/components.tsv`).
 
 ## Adding one
 
@@ -45,8 +45,9 @@ installs there (listed in `~/dotfiles/manifest.tsv` under *"NOT rows in this man
    manifest row and the skill works on this machine but not the next. A local-only skill needs
    neither: the private manifest links the whole `private/agents/skills/` directory to
    `~/.agents/skills.local`.
-3. Run `./install.sh --only agents` (portable) or `./install.sh --only private` (local-only) from
-   `~/dotfiles` to link the skill into `~/.claude/skills/` and `~/.codex/skills/`.
+3. Run `./install.sh install skills` (portable) or `./install.sh install private` (local-only)
+   from `~/dotfiles`. Skills are linked into each selected harness; choose `claude` or `codex`
+   to enable those integrations on this laptop.
 
 Verify the paths land on one file rather than merely existing — a dangling link fails silently and the
 skill just never appears:

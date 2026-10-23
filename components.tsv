@@ -1,0 +1,39 @@
+# name<TAB>description<TAB>requires<TAB>brew formulae<TAB>casks
+core	Installer health check	-	-	-
+package-safety	Package release delays and install protections	-	uv jq gh	-
+shell	Zsh preferences, shortcuts, and completion	-	eza bat fzf zoxide fd ripgrep zsh-autosuggestions zsh-syntax-highlighting	-
+git	Git aliases, delta, and workflow preferences	-	git-delta	-
+github-ssh	GitHub SSH through port 443	-	-	-
+vim	Vim preferences and templates	-	ripgrep	-
+vim-plugins	Native Vim plugins	vim	-	-
+prompt	Starship prompt	shell	starship	-
+history	Atuin history and Ctrl-R integration	shell	atuin	-
+direnv	Directory environment integration	shell	direnv	-
+ranger	Terminal file manager and shell shortcut	shell	ranger	-
+ghostty	Ghostty application and terminal preferences	-	-	ghostty
+fonts	JetBrains Mono Nerd Font	-	-	font-jetbrains-mono-nerd-font
+agent-shared	Shared agent instructions and reference material	-	-	-
+skills	Personal agent skill library	agent-shared	-	-
+claude	Claude Code preferences, instructions, and skill links	skills	jq	-
+codex	Codex preferences, instructions, and skill links	skills	uv	-
+opencode	OpenCode UI preferences and instructions	agent-shared	jq	-
+agent-extras	Third-party skills and gh-stack extension	skills	gh node	-
+gh	GitHub CLI and preferences	-	gh	-
+vscode	VS Code application and preferences	-	jq	visual-studio-code
+docker	Preferences for an existing Docker installation	-	jq	-
+gnupg	GnuPG and keybox preferences	-	gnupg	-
+media	Download and caption tools	-	yt-dlp ffmpeg node uv	-
+documents	Pandoc and Tectonic document tools	-	pandoc tectonic	-
+kubernetes	Kubernetes terminal tools	-	k9s	-
+cloud-mounts	Cloud drive mounts with rclone	-	rclone	-
+mermaid	Pinned Mermaid renderer and helper	-	node uv	-
+orca	Orca wrapper; requires the Orca app and CLI	-	uv	-
+alttab	AltTab source-build helper	-	-	-
+macos-defaults	Manual macOS preference helper	-	-	-
+mos	Mouse scrolling utility	-	-	mos
+whiteboard	Whiteboard application	-	-	devdotfast/tap/whiteboard
+crisp	Display configuration utility	-	-	crisp
+router	Baseten router and traffic view	-	uv	-
+router-claude	Optional Claude Code router profile	-	-	-
+router-opencode	OpenCode router provider; preserves default model	-	jq	-
+private	This laptop's private manifest	-	jq uv	-

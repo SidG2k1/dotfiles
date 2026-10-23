@@ -1,0 +1,56 @@
+model_list:
+  - model_name: baseten-router (litellm)
+    litellm_params:
+      model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017-Fast
+      api_base: https://inference.baseten.co/v1
+      api_key: os.environ/BASETEN_API_KEY
+      order: 1
+    model_info:
+      id: baseten-deepseek-v4.1-flash-1017-fast
+      mode: chat
+      max_input_tokens: 1000000
+      input_cost_per_token: 0.0000006
+      output_cost_per_token: 0.0000024
+      cache_read_input_token_cost: 0.000000014
+
+  - model_name: baseten-router (litellm)
+    litellm_params:
+      model: openai/deepseek-ai/DeepSeek-V4.1-Flash-1017
+      api_base: https://inference.baseten.co/v1
+      api_key: os.environ/BASETEN_API_KEY
+      order: 2
+    model_info:
+      id: baseten-deepseek-v4.1-flash-1017
+      mode: chat
+      max_input_tokens: 1000000
+      input_cost_per_token: 0.0000003
+      output_cost_per_token: 0.0000012
+      cache_read_input_token_cost: 0.000000007
+
+  - model_name: baseten-router (litellm)
+    litellm_params:
+      model: openai/zai-org/GLM-5.3
+      api_base: https://inference.baseten.co/v1
+      api_key: os.environ/BASETEN_API_KEY
+      order: 3
+    model_info:
+      id: baseten-glm-5.3
+      mode: chat
+      max_input_tokens: 1000000
+      input_cost_per_token: 0.0000014
+      output_cost_per_token: 0.0000044
+      cache_read_input_token_cost: 0.00000014
+
+general_settings:
+  # The launcher binds to loopback; local clients use placeholder tokens.
+  dangerously_permit_weak_or_unset_master_key: true
+  trusted_proxy_ranges: []
+
+router_settings:
+  num_retries: 0
+  cooldown_time: 60
+  routing_strategy: simple-shuffle
+
+litellm_settings:
+  drop_params: true
+  callbacks: ["baseten_metrics.metrics_callback"]

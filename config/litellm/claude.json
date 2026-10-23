@@ -1,0 +1,11 @@
+{
+  "env": {
+    "ANTHROPIC_BASE_URL": "http://127.0.0.1:4000",
+    "ANTHROPIC_AUTH_TOKEN": "local-proxy",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL": "baseten-router (litellm)",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL": "baseten-router (litellm)",
+    "ANTHROPIC_DEFAULT_FABLE_MODEL": "baseten-router (litellm)",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "baseten-router (litellm)"
+  },
+  "model": "baseten-router (litellm)"
+}

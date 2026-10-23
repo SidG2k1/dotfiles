@@ -8,6 +8,14 @@
 # Machine-specific values do not belong in this file - it is public. The
 # ~/.zshrc stub sources ~/.zshrc.local after this file; that is the seam for them.
 
+# Read the local selection as data; never source it as shell code.
+typeset -a _dotfiles_components=()
+_dotfiles_selection="${DOTFILES_COMPONENTS_FILE:-${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles/components}"
+if [[ -r $_dotfiles_selection ]]; then
+  _dotfiles_components=("${(@f)$(<"$_dotfiles_selection")}")
+fi
+_dotfiles_enabled() { (( ${_dotfiles_components[(Ie)$1]} > 0 )) }
+
 # ============================================================================
 # COMPLETION SYSTEM
 # ============================================================================
@@ -141,7 +149,7 @@ command -v zoxide >/dev/null && eval "$(zoxide init zsh)"
 alias o='open'
 alias clr='clear'
 alias v='vim'
-alias r='ranger'
+_dotfiles_enabled ranger && (( $+commands[ranger] )) && alias r='ranger'
 
 # Modern CLI replacements.
 # These shadow *core* commands, so they are defined only when the replacement is
@@ -160,7 +168,39 @@ if (( $+commands[eza] )); then
   alias ls='eza --icons=auto'
   alias ll='eza -la --icons=auto --git'
   alias la='eza -a --icons=auto'
-  alias lt='eza --tree --level=2 --icons=auto'
+  unalias lt 2>/dev/null
+  function lt {
+    setopt localoptions pipefail
+    local appearance=never
+    [[ -t 1 ]] && appearance=always
+    # Resolve TTY styling before the pipe; cap subdirectories independently.
+    eza --tree --level=2 --color=$appearance --icons=$appearance "$@" | awk '
+      {
+        line = $0
+        gsub(/\033\[[0-9;]*m/, "", line)
+        gsub(/\033\][^\007\033]*(\007|\033\\)/, "", line)
+        if (!match(line, /(│   |    )*[├└]── /)) {
+          for (d in count) delete count[d]
+          print
+          next
+        }
+        prefix = substr(line, RSTART, RLENGTH)
+        sub(/[├└]── $/, "", prefix)
+        rest = prefix
+        depth = 1
+        while (sub(/^(│   |    )/, "", rest)) depth++
+        for (d in count) if (d > depth) delete count[d]
+        if (depth == 1) { print; next }
+        count[depth]++
+        hidden = 0
+        for (d = 1; d < depth; d++) if (count[d] > 10) hidden = 1
+        if (hidden) next
+        if (count[depth] <= 10) print
+        else if (count[depth] == 11)
+          print substr(line, 1, RSTART - 1) prefix "└── …"
+      }
+    '
+  }
 fi
 (( $+commands[bat] )) && alias cat='bat --paging=never'
 
@@ -174,7 +214,7 @@ alias symcrypt='gpg -c --no-symkey-cache'
 
 # Mount the personal cloud drive. Needs rclone plus a remote named "onedrive"
 # configured by `rclone config` (machine-local, never in this repo).
-(( $+commands[rclone] )) && alias onedrive='rclone --vfs-cache-mode writes mount onedrive: ~/OneDrive &'
+_dotfiles_enabled cloud-mounts && (( $+commands[rclone] )) && alias onedrive='rclone --vfs-cache-mode writes mount onedrive: ~/OneDrive &'
 
 # ============================================================================
 # FUNCTIONS
@@ -230,7 +270,7 @@ export HOMEBREW_NO_ANALYTICS=1
 # PROMPT
 # ============================================================================
 # Falls back to zsh's default prompt when starship is absent.
-command -v starship >/dev/null && eval "$(starship init zsh)"
+_dotfiles_enabled prompt && command -v starship >/dev/null && eval "$(starship init zsh)"
 
 # ============================================================================
 # KEY BINDINGS
@@ -264,11 +304,11 @@ add-zsh-hook preexec _beam_cursor_preexec
 # ============================================================================
 # SHELL INTEGRATIONS
 # ============================================================================
-command -v direnv >/dev/null && eval "$(direnv hook zsh)"
+_dotfiles_enabled direnv && command -v direnv >/dev/null && eval "$(direnv hook zsh)"
 command -v fzf >/dev/null && source <(fzf --zsh)
 # After fzf on purpose: atuin takes Ctrl-R over from fzf's integration (Ctrl-T
 # and Alt-C stay fzf's). Absent, Ctrl-R stays on fzf.
-if command -v atuin >/dev/null; then
+if _dotfiles_enabled history && command -v atuin >/dev/null; then
   eval "$(atuin init zsh)"
   # atuin binds Ctrl-R in viins only (vicmd gets / and k, vim-style), which
   # leaves fzf's vicmd Ctrl-R in place - one search in insert mode, another in

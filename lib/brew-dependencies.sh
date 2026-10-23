@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-# Shared Brewfile probes. Configs care whether a dependency works, while
-# Homebrew Bundle cares whether Homebrew owns it; callers use both answers.
+# Probe component dependencies without requiring Homebrew ownership.
 
 brew_prefix() {
 	if [ -n "${HOMEBREW_PREFIX:-}" ]; then
@@ -48,6 +47,7 @@ pkg_present() {
 	token=${name##*/}
 	case $token in
 		git-delta) command -v delta >/dev/null 2>&1 ;;
+		gnupg) command -v gpg >/dev/null 2>&1 ;;
 		ripgrep) command -v rg >/dev/null 2>&1 ;;
 		zsh-autosuggestions)
 			[ -f "$pfx/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ] ;;
@@ -61,36 +61,4 @@ pkg_present() {
 			fi
 			;;
 	esac
-}
-
-pkg_homebrew_owned() {
-	local kind=$1 name=$2 pfx token
-	command -v brew >/dev/null 2>&1 || return 1
-	pfx=$(brew_prefix)
-	token=${name##*/}
-	if [ "$kind" = cask ]; then
-		[ -d "$pfx/Caskroom/$token" ]
-	else
-		HOMEBREW_NO_AUTO_UPDATE=1 brew list --formula "$name" >/dev/null 2>&1
-	fi
-}
-
-brewfile_entries() {
-	awk '
-		/^[[:space:]]*(brew|cask)[[:space:]]+"/ {
-			kind = $1
-			name = $0; sub(/^[^"]*"/, "", name); sub(/".*$/, "", name)
-			printf "%s\t%s\n", kind, name
-		}
-	' "$1"
-}
-
-external_brewfile_entries() {
-	local brewfile=$1 kind name
-	while IFS=$'\t' read -r kind name; do
-		[ -n "${name:-}" ] || continue
-		if pkg_present "$kind" "$name" && ! pkg_homebrew_owned "$kind" "$name"; then
-			printf '%s\t%s\n' "$kind" "$name"
-		fi
-	done < <(brewfile_entries "$brewfile")
 }

@@ -4,7 +4,7 @@
 #
 # Reads manifest.tsv and checks, per row, that the target was produced by the
 # strategy the manifest claims. Then checks the dependencies that are invisible
-# until they break: Brewfile formulae, vim plugins, the three skill trees
+# until they break: selected packages, vim plugins, the three skill trees
 # resolving to one file, and the eza non-TTY hang. Finally it scans tracked
 # files for identity leakage, because this repo is public.
 #
@@ -18,6 +18,7 @@
 # unless --strict. "Not installed" is a WARN (a fresh or partial machine is a
 # legitimate state); "installed differently than the manifest says" is a FAIL,
 # because that is drift - the repo is no longer the source of truth.
+# Unselected components are skipped; local choices come from the installer.
 #
 # Nothing here writes to the machine or to the repo. It is safe to run anywhere.
 #
@@ -74,6 +75,8 @@ BREW_DEPENDENCIES="$DOTFILES/lib/brew-dependencies.sh"
 }
 # shellcheck source=../lib/brew-dependencies.sh
 . "$BREW_DEPENDENCIES"
+# shellcheck source=../lib/components.sh
+. "$DOTFILES/lib/components.sh"
 
 # Markers for the append-once strategy. Keep in sync with install.sh and with
 # the manifest note on config/ghostty/config.ghostty.
@@ -210,9 +213,19 @@ check_install() {
     return
   fi
 
-  local src target strategy note abs tgt got
+  local src target strategy note abs tgt got group=core
+  [ "$manifest_file" = "$MANIFEST" ] || group=private
   while IFS=$'\t' read -r src target strategy note || [ -n "${src:-}" ]; do
-    case ${src:-} in ''|'#'*) continue ;; esac
+    case ${src:-} in
+      '# ---- '*' ----'*)
+        if [ "$manifest_file" = "$MANIFEST" ]; then
+          group=${src#\# ---- }
+          group=${group%% ----*}
+        fi
+        continue
+        ;;
+      ''|'#'*) continue ;;
+    esac
     [ -n "${target:-}" ] && [ -n "${strategy:-}" ] || {
       row FAIL "manifest row: $src" "malformed row - need source<TAB>target<TAB>strategy<TAB>note"
       continue
@@ -234,6 +247,11 @@ check_install() {
     # only rot.
     if [ "$strategy" != never ] && [ ! -e "$abs" ]; then
       row FAIL "$strategy  $src" "manifest source does not exist in the repo"
+      continue
+    fi
+
+    if [ "$group" != never ] && ! component_enabled "$group"; then
+      row SKIP "$target" "$group is not selected on this laptop"
       continue
     fi
 
@@ -353,8 +371,18 @@ EOF
 
       merge-toml)
         local helper="$DOTFILES/lib/merge-toml.py" result=0
+        local merge_args=("$abs" "$tgt" --check)
+        local private_src private_target private_strategy _private_note
+        # The installer applies the private layer last, including intentional overrides.
+        if [ "$manifest_file" = "$MANIFEST" ] && component_enabled private && [ -f "$DOTFILES/private/manifest.tsv" ]; then
+          while IFS=$'\t' read -r private_src private_target private_strategy _private_note || [ -n "${private_src:-}" ]; do
+            if [ "$private_strategy" = merge-toml ] && [ "$(expand_target "$private_target")" = "$tgt" ]; then
+              merge_args+=(--overlay "$DOTFILES/private/$private_src")
+            fi
+          done <"$DOTFILES/private/manifest.tsv"
+        fi
         if command -v uv >/dev/null 2>&1; then
-          uv run --no-project --python '>=3.11' python "$helper" "$abs" "$tgt" --check || result=$?
+          uv run --no-project --python '>=3.11' python "$helper" "${merge_args[@]}" || result=$?
         else
           row WARN "toml $target" "requires uv"
           continue
@@ -386,56 +414,48 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# 2. Brewfile dependencies. "What breaks" comes from the Brewfile's own comment
-#    above each entry, so the two can never drift apart.
+# 2. Dependencies for selected components
 # ---------------------------------------------------------------------------
 
-# Pull "Without X, Y" out of the Brewfile comment when it is there - that
-# sentence is exactly "what breaks".
-why_it_matters() {
-  local com=$1 out
-  out=$(printf '%s' "$com" | sed -n 's/.*\(\(Without\|Required\|Requires\)[^.]*\.\).*/\1/p' | head -1)
-  [ -z "$out" ] && out=$(first_sentence "$com")
-  printf '%s' "$out"
-}
-
-check_brewfile() {
-  section "required dependencies (Brewfile)"
-
-  local bf="$DOTFILES/Brewfile"
-  if [ ! -f "$bf" ]; then
-    row WARN "Brewfile" "not found - cannot check required dependencies"
-    return
-  fi
-
-  local is_darwin=0
-  [ "$(uname -s)" = Darwin ] && is_darwin=1
-
-  local kind name com
-  while IFS=$'\t' read -r kind name com; do
-    [ -n "${name:-}" ] || continue
+check_dependencies() {
+  section "selected component dependencies"
+  local kind name
+  while IFS=$'\t' read -r kind name; do
+    [ -n "$name" ] || continue
     if pkg_present "$kind" "$name"; then
-      row PASS "$kind  $name" "present"
-    elif [ "$kind" = cask ] && [ "$is_darwin" -eq 0 ]; then
-      row SKIP "$kind  $name" "macOS-only cask, not checked on $(uname -s)"
+      row PASS "$kind $name" "available"
+    elif [ "$kind" = cask ] && [ "$(uname -s)" != Darwin ]; then
+      row SKIP "$kind $name" "macOS-only cask"
     else
-      row FAIL "$kind  $name" "MISSING - $(why_it_matters "${com:-}")"
+      row FAIL "$kind $name" "missing dependency; run install.sh for the saved selection"
     fi
-  done <<EOF
-$(awk '
-  /^[[:space:]]*#/ {
-    line = $0; sub(/^[[:space:]]*#[[:space:]]?/, "", line)
-    com = (com == "" ? line : com " " line); next
-  }
-  /^[[:space:]]*(brew|cask)[[:space:]]+"/ {
-    kind = $1
-    name = $0; sub(/^[^"]*"/, "", name); sub(/".*$/, "", name)
-    printf "%s\t%s\t%s\n", kind, name, com
-    com = ""; next
-  }
-  { com = "" }
-' "$bf")
-EOF
+  done < <(components_packages "$COMPONENT_SELECTED")
+  if component_enabled mermaid; then
+    if [ -x "$HOME/.local/share/dotfiles/mermaid/node_modules/.bin/mmdc" ]; then
+      row PASS mermaid "renderer installed"
+    else
+      row FAIL mermaid "renderer missing; run install.sh install mermaid"
+    fi
+  fi
+  if component_enabled package-safety; then
+    # shellcheck source=../lib/package-safety.sh
+    . "$DOTFILES/lib/package-safety.sh"
+    if package_script_approvals_supported; then
+      row PASS "script approvals" "installed package managers support dependency approvals"
+    else
+      row FAIL "script approvals" "update unsupported package managers before enabling scripts"
+    fi
+    if pnpm_security_config check; then
+      row PASS "pnpm safety" "policy matches (if installed)"
+    else
+      row FAIL "pnpm safety" "re-run install.sh install package-safety"
+    fi
+    if uv tool list >/dev/null; then
+      row PASS "uv safety" "installed uv accepts the configured cooldown"
+    else
+      row FAIL "uv safety" "update uv to a version supporting duration-based exclude-newer"
+    fi
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -445,7 +465,7 @@ EOF
 # ---------------------------------------------------------------------------
 
 check_skills() {
-  section "agent skills (one SKILL.md per skill, three paths)"
+  section "selected harness skill links"
 
   local d s a b ra tool bad
   # Tracked skills that never reached ~/.agents (install.sh links them there).
@@ -461,6 +481,7 @@ check_skills() {
     ra=$(resolve "$a" 2>/dev/null)
     bad=0
     for tool in claude codex; do
+      component_enabled "$tool" || continue
       b="$HOME/.$tool/skills/$s/SKILL.md"
       if [ ! -e "$b" ]; then
         row FAIL "skill $s" "missing ~/.$tool/skills/$s - $tool cannot see this skill"
@@ -470,8 +491,21 @@ check_skills() {
         bad=1
       fi
     done
-    [ "$bad" -eq 0 ] && row PASS "skill $s" "~/.agents, ~/.claude, ~/.codex -> ${ra#"$HOME"/}"
+    [ "$bad" -eq 0 ] && row PASS "skill $s" "selected harnesses -> ${ra#"$HOME"/}"
   done
+
+  if component_enabled agent-extras; then
+    local spec
+    for spec in $VENDORED_SKILLS; do
+      s=${spec##*@}
+      [ -f "$HOME/.agents/skills/$s/SKILL.md" ] || row FAIL "skill $s" "missing; re-run install.sh install agent-extras"
+    done
+    if command -v gh >/dev/null 2>&1 && gh extension list 2>/dev/null | grep -q 'github/gh-stack'; then
+      row PASS gh-stack "extension installed"
+    else
+      row FAIL gh-stack "missing; authenticate gh and re-run install.sh install agent-extras"
+    fi
+  fi
 }
 
 # Optional machine-local executable names, one per line; no commands are evaluated.
@@ -794,21 +828,35 @@ case " $SECTIONS " in
     ;;
 esac
 
+if [ "$do_self_test" -eq 1 ]; then COMPONENT_SAVED=core; else components_read || exit 2; fi
+components_resolve "$COMPONENT_SAVED" || exit 2
+COMPONENT_SELECTED=$COMPONENT_RESOLVED
+
 printf '%sdotfiles-doctor%s  repo: %s  host: %s\n' "$C_HEAD" "$C_OFF" "$DOTFILES" "$(uname -s)"
 
 if [ "$do_self_test" -eq 1 ]; then
   self_test
 else
   want install && check_install
-  if want install && [ -f "$DOTFILES/private/manifest.tsv" ]; then
-    check_install "$DOTFILES/private/manifest.tsv" "$DOTFILES/private"
+  if want install && component_enabled private; then
+    if [ -f "$DOTFILES/private/manifest.tsv" ]; then
+      check_install "$DOTFILES/private/manifest.tsv" "$DOTFILES/private"
+    else
+      row FAIL private "selected, but private/manifest.tsv is missing"
+    fi
   fi
-  want brew && check_brewfile
-  want skills && check_skills
-  want vim && check_vim
-  want probe && [ "$PROBE" -eq 1 ] && check_probe
+  want brew && check_dependencies
+  if want skills; then
+    if component_enabled skills; then check_skills; else row SKIP skills "not selected"; fi
+  fi
+  if want vim; then
+    if component_enabled vim-plugins; then check_vim; else row SKIP vim-plugins "not selected"; fi
+  fi
+  if want probe && [ "$PROBE" -eq 1 ]; then
+    if component_enabled shell; then check_probe; else row SKIP shell-probes "shell not selected"; fi
+  fi
   want scan && check_scan
-  want local && check_local
+  want local && component_enabled private && check_local
 fi
 
 printf '\n%s%d pass  %d warn  %d fail  %d skip%s\n' \
