@@ -9,12 +9,14 @@ description: Use when implementing or reviewing code or docs where agent-generat
 
 Make the smallest correct change that fits the codebase. Minimize code, files, concepts, dependencies, tests, and churn — not understanding, correctness, or necessary verification.
 
+Measure "smallest" by the resulting design, not by lines changed: the concepts a reader must learn, the places that must stay in agreement, and the interfaces others will depend on. Unmerged work, including your own earlier commits, is not a constraint; when requirements change mid-task, re-derive the shape from the full set instead of extending the first design.
+
 ## Before coding
 
 Understand the requested behavior and trace the path being changed. Then stop at the first option that works:
 
 1. **Do nothing / delete** — new code is unnecessary.
-2. **Reuse** — the codebase already has the behavior or pattern.
+2. **Reuse** — the codebase already has the behavior, or a pattern that models the same relationship. A pattern that only looks similar costs more than local code.
 3. **Stdlib** — the language already provides it.
 4. **Native** — the browser, HTML/CSS, database, OS, or framework provides it.
 5. **Existing dependency** — an installed package solves it cleanly.
@@ -32,6 +34,8 @@ Understand first; do not turn this ladder into a research project.
 - Preserve repository conventions.
 - Prefer self-documenting code through clear names and structure. Do not add comments when the code explains itself; reserve comments for non-obvious rationale or constraints.
 - Duplication can be cheaper than the wrong abstraction. Extract only when a stable concept exists.
+- State each fact once. When correctness depends on two places agreeing (config blocks that reference each other, a check that A matches B, hand-synced lists), make it one declaration. Duplicated code can be acceptable; duplicated facts are not.
+- Durable interfaces (config keys, API fields, CLI flags, stored formats) are expensive to reshape once deployed. Shape them from the complete requirements and surface an open shape as a decision (`design-decisions`); keep the code behind them minimal.
 
 If a small request unexpectedly produces many files, a dependency, an abstraction layer, or a large diff, reconsider the approach. Large is a warning signal, not automatically wrong.
 
@@ -62,7 +66,8 @@ After implementation, inspect the diff once for removable complexity:
 - **delete** unnecessary code/files/tests/config;
 - **reuse** existing code;
 - **stdlib/native** replace custom machinery;
-- **yagni** remove speculative abstraction/options/defensive paths;
+- **yagni** remove speculative abstraction/options/defensive paths. A check is speculative only when no realistic input reaches it; keep validation that sibling fields already have;
+- **one fact** merge places that must stay in agreement into one declaration;
 - **shrink** express the same behavior more simply without becoming cryptic;
 - **test-noise** remove redundant, trivial, implementation-coupled tests;
 - **rot** replace prose restating a source of truth (code, `--help`, git, upstream docs) with a pointer to it;
@@ -73,6 +78,6 @@ For each finding, identify what can be removed and what replaces it, if anything
 
 ## Never optimize away
 
-Do not use minimalism to skip root-cause analysis, trust-boundary validation, realistic error handling, security/privacy, cleanup/cancellation/concurrency correctness, accessibility, repository-required checks, or explicitly requested behavior.
+Do not use minimalism to skip root-cause analysis, trust-boundary or operator-config validation, realistic error handling, security/privacy, cleanup/cancellation/concurrency correctness, accessibility, repository-required checks, or explicitly requested behavior.
 
 A tiny patch in the wrong place is still bad engineering.

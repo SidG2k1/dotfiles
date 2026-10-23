@@ -1,156 +1,9 @@
-# ---------------------------------------------------------------------------
-# ALLOWLIST. Nothing is tracked unless it is named below.
-#
-# The README says this repo "only tracks intentionally selected files". A
-# denylist cannot deliver that: it tracks whatever nobody thought to exclude, so
-# the first mistake is a leak. This file inverts the default instead.
-#
-#   *      ignore every file, everywhere
-#   !*/    but still descend into directories, so a re-include below can be
-#          reached (git will not look inside an ignored directory)
-#   !path  re-include exactly one file
-#
-# Consequences worth knowing before editing:
-#
-#   - Adding a file to the repo is TWO steps. `git add newfile` will refuse
-#     ("ignored by one of your .gitignore files") until you add a `!` line for
-#     it here. That refusal is the feature: every tracked file is a decision.
-#   - `git status` stays quiet about junk - build output, downloaded archives,
-#     an app that dumped a cache into a config directory - instead of inviting
-#     you to `git add -A` it by accident.
-#   - Paths starting with `/` are anchored to the repo root, so `!/zshrc`
-#     cannot accidentally re-include some other directory's `zshrc`.
-#   - Bulk directory re-includes are avoided on purpose. `!/config/**` would
-#     hand back the whole subtree, which is denylist behaviour again.
-#
-# The defensive patterns at the bottom are redundant while the allowlist holds -
-# they exist for when it does not. If a future edit re-includes a directory in
-# bulk, those patterns are the second line of defence that still keeps
-# credentials, keys, histories and databases out.
-#
-# Run `bin/dotfiles-doctor --only scan` before pushing; CI repeats that scan and
-# runs gitleaks over the full history.
-# ---------------------------------------------------------------------------
+# Denylist: everything outside these patterns is tracked. Patterns cover what
+# must never land in this public repo; run `bin/dotfiles-doctor --only scan`
+# before pushing, and CI repeats that scan and runs gitleaks over the history.
 
-*
-!*/
-
-
-# ---- repo documentation and bootstrap inputs ----
-!/.gitignore
-!/README.md
-!/AGENTS.md
-!/setup.md
-!/manifest.tsv
-!/Brewfile
-!/Brewfile.optional
-!/install.sh
-!/lib/brew-dependencies.sh
-!/lib/merge-toml.py
-!/lib/orcw.py
-!/lib/yt-captions.py
-
-# ---- CI ----
-!/.github/workflows/ci.yml
-
-# ---- tests ----
-!/tests/orcw.sh
-!/tests/test_yt_captions.py
-
-# ---- scripts (installed to ~/bin, must stay mode 755) ----
-!/bin/dotfiles-doctor
-!/bin/mermaid-check
-!/bin/rebuild-alttab
-!/bin/macos-defaults
-!/bin/orcw
-!/bin/yt-captions
-
-# ---- shell ----
-!/zshenv
-!/zshrc
-
-# ---- vim ----
-!/vimrc
-!/vim/plugins.txt
-!/vim/templates/skeleton.c
-!/vim/templates/skeleton.cpp
-!/vim/templates/skeleton.rkt
-!/vim/templates/skeleton.rmd
-!/vim/templates/skeleton.tex
-
-# ---- git ----
-!/gitconfig
-!/config/git/ignore
-
-# ---- agents ----
-!/agents/AGENTS.md
-!/agents/SKILLS.md
-!/agents/claude/settings.json
-!/agents/claude/statusline.sh
-!/agents/reference/*
-!/agents/skills/agentish-to-english/SKILL.md
-!/agents/skills/anti-slop/SKILL.md
-!/agents/skills/autopush/SKILL.md
-!/agents/skills/autopush/agents/openai.yaml
-!/agents/skills/memdump/SKILL.md
-!/agents/skills/memdump/agents/openai.yaml
-!/agents/skills/memload/SKILL.md
-!/agents/skills/memload/agents/openai.yaml
-!/agents/skills/orchestration-v2/SKILL.md
-!/agents/skills/pr-update/SKILL.md
-!/agents/skills/code-grounded-explainer/SKILL.md
-!/agents/skills/design-decisions/SKILL.md
-!/agents/skills/incident-advisor/SKILL.md
-!/agents/skills/technical-meeting-brief/SKILL.md
-!/agents/skills/whiteboard-review/SKILL.md
-!/agents/skills/whiteboard-review/agents/openai.yaml
-!/agents/skills/i-have-adhd/SKILL.md
-!/agents/skills/i-have-adhd/agents/openai.yaml
-!/agents/skills/brainstorming/SKILL.md
-!/agents/skills/brainstorming/scripts/frame-template.html
-!/agents/skills/brainstorming/scripts/helper.js
-!/agents/skills/brainstorming/scripts/server.cjs
-!/agents/skills/brainstorming/scripts/start-server.sh
-!/agents/skills/brainstorming/scripts/stop-server.sh
-!/agents/skills/brainstorming/visual-companion.md
-!/agents/skills/dispatching-parallel-agents/SKILL.md
-!/agents/skills/executing-plans/SKILL.md
-!/agents/skills/receiving-code-review/SKILL.md
-!/agents/skills/subagent-driven-development/SKILL.md
-!/agents/skills/subagent-driven-development/code-reviewer.md
-!/agents/skills/subagent-driven-development/implementer-prompt.md
-!/agents/skills/subagent-driven-development/re-review-prompt.md
-!/agents/skills/subagent-driven-development/scripts/review-package
-!/agents/skills/subagent-driven-development/scripts/sdd-workspace
-!/agents/skills/subagent-driven-development/scripts/task-brief
-!/agents/skills/subagent-driven-development/task-reviewer-prompt.md
-!/agents/skills/systematic-debugging/SKILL.md
-!/agents/skills/systematic-debugging/condition-based-waiting-example.ts
-!/agents/skills/systematic-debugging/condition-based-waiting.md
-!/agents/skills/systematic-debugging/defense-in-depth.md
-!/agents/skills/systematic-debugging/find-polluter.sh
-!/agents/skills/systematic-debugging/root-cause-tracing.md
-!/agents/skills/verification-before-completion/SKILL.md
-!/agents/skills/writing-plans/SKILL.md
-
-# ---- per-tool config ----
-!/config/starship.toml
-!/config/ghostty/config.ghostty
-!/config/ghostty/appearance.ghostty
-!/config/atuin/config.toml
-!/config/ssh/github.conf
-!/config/opencode/cli.json
-!/config/docker/daemon.json
-!/config/gh/config.yml
-!/config/gnupg/common.conf
-!/config/vscode/settings.json
-!/config/yt-dlp/config
-!/config/mermaid/package.json
-
-# ---------------------------------------------------------------------------
-# Denylist, second line of defence. These come AFTER the allowlist so the last
-# matching pattern wins and they override any `!` re-include above.
-# ---------------------------------------------------------------------------
+# Machine-private overlay with its own manifest (private/manifest.tsv)
+/private/
 
 # Generated machine state owned by the skills CLI (install timestamps, the
 # last-selected agent list, dismissed prompts), not configuration.
@@ -173,12 +26,14 @@
 # Environment files
 .env
 .env.*
-private/
 
 # Databases and caches
 **/*.sqlite*
 **/Cache/
 **/CachedData/
+__pycache__/
+*.pyc
+node_modules/
 
 # Histories and editor recovery data can contain private content
 **/*history*

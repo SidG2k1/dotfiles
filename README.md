@@ -107,9 +107,9 @@ whose plugin features are silently inert, or `eza` hanging in a non-TTY shell.
 
 ## Safety
 
-- **`.gitignore` is an allowlist**: ignore everything, then re-include the
-  specific tracked paths. A denylist of patterns only blocks the leaks you
-  already thought of; the failure mode is a file you never meant to add
-  arriving because it matched nothing.
-- **gitleaks runs in CI** over the working tree and history on every push, so a
-  credential cannot land unnoticed even if the allowlist is widened by mistake.
+- **`.gitignore` is a denylist**: `private/`, credentials, histories, databases
+  and caches are excluded; everything else is tracked. It only blocks the leaks
+  it names, so review `git status` before committing.
+- **Two scans run in CI**: the doctor's identity scan covers tracked files, and gitleaks covers
+  every push against full history. A credential cannot land unnoticed even if it matches no ignore
+  pattern.

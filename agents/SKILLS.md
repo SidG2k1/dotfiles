@@ -39,12 +39,12 @@ installs there (listed in `~/dotfiles/manifest.tsv` under *"NOT rows in this man
 
 1. Create `<name>/SKILL.md` under `~/dotfiles/agents/skills/` (portable) or
    `~/dotfiles/private/agents/skills/` (local-only).
-2. Portable only: in `~/dotfiles/.gitignore`, add a `!/agents/skills/<name>/...` line for each tracked
-   file (`SKILL.md`, and `agents/openai.yaml` if the skill has one); in `~/dotfiles/manifest.tsv`, add
-   a row for the `~/.agents/skills/<name>` link. Without the `.gitignore` line, `git add` refuses and
-   `git status` stays silent. Skip either and the skill works on this machine but is missing on the
-   next. A local-only skill needs neither: the private manifest links the whole
-   `private/agents/skills/` directory to `~/.agents/skills.local`.
+2. Portable only: add a row to `~/dotfiles/manifest.tsv` for the `~/.agents/skills/<name>` link, then
+   confirm `git status` lists the new files and `git check-ignore -v <path>` prints nothing — a
+   denylist pattern that happens to match the filename hides the file from `git status`. Skip the
+   manifest row and the skill works on this machine but not the next. A local-only skill needs
+   neither: the private manifest links the whole `private/agents/skills/` directory to
+   `~/.agents/skills.local`.
 3. Run `./install.sh --only agents` (portable) or `./install.sh --only private` (local-only) from
    `~/dotfiles` to link the skill into `~/.claude/skills/` and `~/.codex/skills/`.
 

@@ -20,8 +20,9 @@
     "type": "command",
     "command": "bash ~/.claude/statusline.sh"
   },
+  "outputStyle": "Concise",
+  "theme": "auto",
   "alwaysThinkingEnabled": true,
-  "effortLevel": "high",
   "tui": "fullscreen",
   "voice": {
     "enabled": true,

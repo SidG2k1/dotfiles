@@ -4,7 +4,7 @@
 
 This repository installs portable macOS configuration. Root files contain shell, Vim, Git, and Homebrew settings. Application config lives under `config/`; executable tools live in `bin/`; shared shell and Python helpers live in `lib/`; agent instructions and skills live in `agents/`; and the orcw fixture test lives in `tests/`.
 
-Treat `manifest.tsv` as the source of truth for installed paths and strategies. Update it when adding an installed file. Because `.gitignore` is an allowlist, also add an explicit `!/<path>` entry for every new tracked file. Keep machine-specific values, identities, credentials, and absolute `/Users/...` paths out of the repository.
+Treat `manifest.tsv` as the source of truth for installed paths and strategies. Update it when adding an installed file. `.gitignore` is a denylist, so check `git status` before committing and add a pattern for anything that must stay local. Keep machine-specific values, identities, credentials, and absolute `/Users/...` paths out of the repository.
 
 ## Development and Validation
 
