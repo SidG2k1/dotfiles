@@ -55,14 +55,11 @@ jobs:
       # which is precisely how a 16 MB archive of vim state survived four
       # commits in this repo's own history. --log-opts='--all --full-history'
       # walks every object reachable from every ref instead.
-      #
-      # Pinned: 'gitleaks detect' is deprecated in favour of 'gitleaks git' in
-      # 8.19+, so the version and the subcommand have to move together.
       - name: gitleaks (full history)
         run: |
           set -euo pipefail
-          V=8.18.4
+          V=8.24.3
           curl -fsSL \
             "https://github.com/gitleaks/gitleaks/releases/download/v${V}/gitleaks_${V}_linux_x64.tar.gz" \
             | tar -xz gitleaks
-          ./gitleaks detect --no-banner --redact --log-opts='--all --full-history'
+          ./gitleaks git --no-banner --redact --log-opts='--all --full-history'

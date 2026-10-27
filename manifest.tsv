@@ -63,6 +63,13 @@ config/starship.toml	~/.config/starship.toml	link	Prompt config only. Nothing br
 # ---- history ----
 config/atuin/config.toml	~/.config/atuin/config.toml	link	Portable search preferences; history and authentication remain in Atuin's own storage.
 
+# ---- yazi ----
+config/yazi/yazi.toml	~/.config/yazi/yazi.toml	link	Shared preferences; runtime state stays outside the repo.
+config/yazi/keymap.toml	~/.config/yazi/keymap.toml	link	Shared keybindings layered over Yazi defaults.
+config/yazi/init.lua	~/.config/yazi/init.lua	link	Initialize shared plugin preferences; runtime state remains local.
+config/yazi/plugins/marks.yazi	~/.config/yazi/plugins/marks.yazi	link	Plugin code only; bookmark paths remain in local state storage.
+config/yazi/plugins/git.yazi	~/.config/yazi/plugins/git.yazi	link	Vendored from https://github.com/yazi-rs/plugins/tree/f703392df78b5fba5e8f9f1ad0b1cb6d3def9736/git.yazi; preserve upstream files and license when updating.
+
 # ---- ghostty ----
 config/ghostty/appearance.ghostty	~/.config/ghostty/appearance.ghostty	link	Optional existing appearance preset; install it without overriding the active terminal's per-display settings.
 config/ghostty/config.ghostty	~/.config/ghostty/config	append-once	Both the tool and the human edit this file, so append a marker-delimited block (# >>> dotfiles managed block >>>) and rewrite only that region. IMPORTANT: ghostty loads BOTH ~/.config/ghostty/config and ~/.config/ghostty/config.ghostty, and config.ghostty is read LAST - verified by setting the same key in both, where config.ghostty won. Keep exactly one of them. A leftover config.ghostty silently overrides this managed block. Ghostty logs an error per unrecognized key, so only append keys the installed version accepts.

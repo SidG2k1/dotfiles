@@ -49,6 +49,9 @@ pkg_present() {
 		git-delta) command -v delta >/dev/null 2>&1 ;;
 		gnupg) command -v gpg >/dev/null 2>&1 ;;
 		ripgrep) command -v rg >/dev/null 2>&1 ;;
+		poppler) command -v pdftoppm >/dev/null 2>&1 ;;
+		sevenzip) command -v 7zz >/dev/null 2>&1 || command -v 7z >/dev/null 2>&1 ;;
+		imagemagick) command -v magick >/dev/null 2>&1 ;;
 		zsh-autosuggestions)
 			[ -f "$pfx/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ] ;;
 		zsh-syntax-highlighting)

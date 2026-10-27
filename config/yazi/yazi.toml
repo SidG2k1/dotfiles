@@ -1,0 +1,14 @@
+[mgr]
+sort_by = "natural"
+linemode = "size"
+show_symlink = true
+
+[[plugin.prepend_fetchers]]
+url = "*"
+run = "git"
+group = "git"
+
+[[plugin.prepend_fetchers]]
+url = "*/"
+run = "git"
+group = "git"

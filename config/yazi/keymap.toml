@@ -1,0 +1,12 @@
+[mgr]
+prepend_keymap = [
+  { on = "i", run = "shell 'bat --paging=always --pager=less -- %h' --block", desc = "View file in bat" },
+  { on = "!", run = '''shell '"${SHELL:-zsh}" -i' --block''', desc = "Open shell here" },
+  # These defaults would otherwise advertise unavailable bookmark-prefix actions.
+  { on = ["m", "s"], run = "noop" },
+  { on = ["m", "p"], run = "noop" },
+  { on = ["m", "b"], run = "noop" },
+  { on = ["m", "m"], run = "noop" },
+  { on = ["m", "o"], run = "noop" },
+  { on = ["m", "n"], run = "noop" },
+]

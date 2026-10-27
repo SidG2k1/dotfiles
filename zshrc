@@ -150,6 +150,8 @@ alias o='open'
 alias clr='clear'
 alias v='vim'
 _dotfiles_enabled ranger && (( $+commands[ranger] )) && alias r='ranger'
+# Both file-manager components claim `r`; defined second, yazi wins if both are selected.
+_dotfiles_enabled yazi && (( $+commands[yazi] )) && alias r='yazi'
 
 # Modern CLI replacements.
 # These shadow *core* commands, so they are defined only when the replacement is
@@ -263,6 +265,7 @@ setopt PUSHD_IGNORE_DUPS
 # ============================================================================
 export EDITOR=vim
 export VISUAL="$EDITOR"
+export PAGER='less -R'
 export CLICOLOR=1
 export HOMEBREW_NO_ANALYTICS=1
 

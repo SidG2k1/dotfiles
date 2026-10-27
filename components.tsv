@@ -10,6 +10,7 @@ prompt	Starship prompt	shell	starship	-
 history	Atuin history and Ctrl-R integration	shell	atuin	-
 direnv	Directory environment integration	shell	direnv	-
 ranger	Terminal file manager and shell shortcut	shell	ranger	-
+yazi	Terminal file manager and shell shortcut	shell	yazi ffmpeg poppler sevenzip jq resvg imagemagick	-
 ghostty	Ghostty application and terminal preferences	-	-	ghostty
 fonts	JetBrains Mono Nerd Font	-	-	font-jetbrains-mono-nerd-font
 agent-shared	Shared agent instructions and reference material	-	-	-

@@ -7,19 +7,14 @@
 font-family = "JetBrainsMono Nerd Font"
 
 # Keep more agent and build output available; allocation is lazy and per pane.
-scrollback-limit = 100000000
+scrollback-limit-bytes = 100000000
 
 # Restore window geometry, tabs, splits, and working directories after quitting.
 # Running processes and scrollback are not restored.
 window-save-state = always
 
-# Option/Alt acts as Meta for word movement and terminal shortcuts in zsh and nvim.
-macos-option-as-alt = true
-
-# Ghostty's default, kept so it overrides an 'allow' set above the block: 'allow'
-# lets any process in the terminal, including one over ssh, read the clipboard
-# silently, and the clipboard routinely holds passwords and tokens.
-clipboard-read = ask
+# Selecting text copies it immediately, so output can be pasted without Cmd+C.
+copy-on-select = clipboard
 
 # Prepare interactive SSH sessions: the wrapper installs remote terminfo and
 # falls back safely when it cannot.
