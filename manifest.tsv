@@ -85,7 +85,6 @@ agents/skills/anti-slop	~/.agents/skills/anti-slop	link	Personal skill: keep age
 agents/skills/autopush	~/.agents/skills/autopush	link	Personal skill: stage selectively, commit, push, refresh the PR body.
 agents/skills/memdump	~/.agents/skills/memdump	link	Personal skill: checkpoint session context to a memory file before a context wipe.
 agents/skills/memload	~/.agents/skills/memload	link	Personal skill: reload a memory file and re-verify it against the codebase.
-agents/skills/orchestration-v2	~/.agents/skills/orchestration-v2	link	Personal skill: run Orca multi-agent work through the orcw wrapper (bin/orcw) instead of the raw orchestration CLI. Inert without ~/bin/orcw and a running Orca app; the vendored orchestration skill stays for the commands orcw does not wrap.
 agents/skills/pr-update	~/.agents/skills/pr-update	link	Personal skill: propose a PR description update via gh, never write without approval. Needs the gh CLI authenticated.
 agents/skills/code-grounded-explainer	~/.agents/skills/code-grounded-explainer	link	Personal skill: explain unfamiliar code or designs with concrete examples and diagrams, validated with bin/mermaid-check when it is installed.
 agents/skills/design-decisions	~/.agents/skills/design-decisions	link	Personal skill: compare open design options by effort, reversibility, and tradeoffs, and recommend one.
@@ -116,7 +115,8 @@ agents/SKILLS.md	~/.codex/skills/README.md	link	Relative symlink ../../.agents/S
 # ---- opencode ----
 agents/AGENTS.md	~/.config/opencode/AGENTS.md	link	Fourth symlink to the same file for OpenCode: its global instructions path is fixed at ~/.config/opencode/AGENTS.md and it follows neither CLAUDE.md nor ~/.agents/AGENTS.md. Same indirection through ~/.agents/AGENTS.md.
 config/opencode/cli.json	~/.config/opencode/cli.json	merge-json	Manage the existing UI preference subset; app-owned debug and experimental settings survive the merge.
-config/opencode/opencode.json	~/.config/opencode/opencode.json	merge-json	Shared settings and permission rules; jq merge so each laptop keeps its own model and agents.title.model. Provider credentials stay in OpenCode's auth store; the @jevvy/permissions plugin reads ~/.config/jevvy/jevvy.jsonc, which holds an API key and stays in the private manifest.
+config/opencode/opencode.json	~/.config/opencode/opencode.json	merge-json	Shared settings and permission rules; jq merge so each laptop keeps its own model and agents.title.model. Provider credentials stay in OpenCode's auth store; the permission reviewer plugin reads BASETEN_API_KEY from the OpenCode server's environment, which the private shell file sets.
+config/opencode/permission-reviewer.jsonc	~/.config/opencode/permission-reviewer.jsonc	merge-json	Reviewer model and the shell actions that always go to a human. A copy, not a link: agents cannot edit the installed file, and a repo edit takes effect only after ./install.sh.
 
 # ---- gh ----
 config/gh/config.yml	~/.config/gh/config.yml	link	gh rewrites this file on `gh config set` and on schema migrations, so with a symlink those edits land in the repo working tree - visible in git status, never lost. Credentials stay in the sibling hosts.yml, which is gitignored and never installed.
@@ -137,12 +137,6 @@ bin/yt-captions	~/bin/yt-captions	link	Needs uv and Node.js; uv supplies the Pyt
 # ---- mermaid ----
 bin/mermaid-check	~/bin/mermaid-check	link	Render Mermaid blocks from Markdown without editing the input; needs uv and the optional pinned Mermaid CLI described in setup.md.
 config/mermaid/package.json	~/.local/share/dotfiles/mermaid/package.json	link	Pinned optional Mermaid CLI dependency; install with npm in this directory when diagram checking is needed.
-
-# ---- orca ----
-bin/orcw	~/bin/orcw	link	zshrc puts ~/bin at the front of PATH. Bash launcher that resolves its symlink chain back to the clone and runs lib/orcw.py under uv (falls back to python3). Needs the orca CLI on PATH and the Orca app running; `orcw doctor` reports what the installed Orca version lacks.
-
-# ---- alttab ----
-bin/rebuild-alttab	~/bin/rebuild-alttab	link	zshrc puts ~/bin at the front of PATH. Self-contained bash; override the checkout location with ALTTAB_SRC. Needs full Xcode selected, not just the Command Line Tools.
 
 # ---- macos-defaults ----
 bin/macos-defaults	~/bin/macos-defaults	link	zshrc puts ~/bin at the front of PATH. Run by hand; installing it changes no setting, and the defaults it writes need a logout to apply.

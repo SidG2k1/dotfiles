@@ -13,7 +13,7 @@
     "todo": true
   },
   "plugins": [
-    "@jevvy/permissions"
+    "opencode-permission-reviewer@2.5.0"
   ],
   "permissions": [
     {
@@ -428,8 +428,13 @@
     },
     {
       "action": "edit",
-      "resource": "*jevvy/jevvy.jsonc",
+      "resource": "*opencode/permission-reviewer.jsonc",
       "effect": "ask"
+    },
+    {
+      "action": "edit",
+      "resource": "*/.config/opencode/*",
+      "effect": "deny"
     },
     {
       "action": "shell",

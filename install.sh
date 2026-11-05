@@ -876,27 +876,26 @@ link_agent_skills() { # link_agent_skills <layer>... - dirs under ~/.agents
 
 phase_agent_extras() {
 	heading "agent skills + gh extension"
-	local spec name
+	if ! command -v gh >/dev/null 2>&1; then
+		fail "gh not found; provide GitHub CLI and re-run agent-extras"
+		return 0
+	fi
+	local spec repo name
 	for spec in $VENDORED_SKILLS; do
-		name="${spec##*@}"
+		repo="${spec%@*}" name="${spec##*@}"
 		if [ -d "$HOME/.agents/skills/$name" ]; then
 			ok "vendored skill $name present"
 		elif [ "$DRY_RUN" -eq 1 ]; then
-			plan "npx -y skills add $spec -g --agent universal -y"
-		elif ! command -v npx >/dev/null 2>&1; then
-			fail "npx not found; provide Node.js and re-run agent-extras"
-		elif npx -y skills add "$spec" -g --agent universal -y </dev/null; then
-			changed "vendored skill $name installed from $spec"
+			plan "gh skill install $repo $name --agent universal --scope user"
+		elif gh skill install "$repo" "$name" --agent universal --scope user </dev/null; then
+			changed "vendored skill $name installed from $repo"
 		else
-			fail "skills CLI could not install $name" \
-				"Re-run by hand: npx -y skills add $spec -g --agent universal -y"
+			fail "gh skill could not install $name (gh older than 2.102, or not authenticated?)" \
+				"Re-run by hand: gh skill install $repo $name --agent universal --scope user"
 		fi
 	done
 
-
-	if ! command -v gh >/dev/null 2>&1; then
-		fail "gh not found; provide GitHub CLI and re-run agent-extras"
-	elif gh extension list 2>/dev/null | grep -q 'github/gh-stack'; then
+	if gh extension list 2>/dev/null | grep -q 'github/gh-stack'; then
 		ok "gh extension gh-stack"
 	elif [ "$DRY_RUN" -eq 1 ]; then
 		plan "gh extension install github/gh-stack"

@@ -57,7 +57,7 @@ Run the narrowest relevant existing formatter, linter, type checker, build, and 
 - **Go:** concrete types first; small consumer-side interfaces only when substitution is needed; no wrapper layers or goroutines without clear lifecycle/cancellation.
 - **Rust:** std and concrete owned types first; no traits, generics, lifetimes-juggling, or macros until a second implementation exists; follow the crate's existing error convention — no new error types or one-line wrappers around std calls; clone deliberately, not reflexively to silence the borrow checker; do not test what the type system or std already guarantees.
 - **Frontend:** semantic HTML, native controls, CSS, and browser APIs before JS/library machinery; avoid one-off component abstractions and mirrored state. Accessibility is not slop.
-- **Markdown/docs:** prose is for what the reader cannot get from the source of truth — point at code, `--help`, or upstream docs instead of restating facts (flags, limits, defaults) that rot; state each fact once; no scaffolding sections, speculative notes for hypothetical situations, or decorative formatting.
+- **Markdown/docs:** prose is for what the reader cannot get from the source of truth — point at code, `--help`, or upstream docs instead of restating facts (flags, limits, defaults) that rot; state each fact once; no scaffolding sections, speculative notes for hypothetical situations, or decorative formatting; in docs and code comments, mention an earlier version or what a change replaced only in changelogs, release notes, and migration guides.
 
 ## Anti-slop review
 

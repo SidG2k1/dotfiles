@@ -12,6 +12,8 @@ metadata:
 
 Shape output so the reader can find the next action, follow progress, and resume without reconstructing the conversation.
 
+The reader forgets anything not on screen. Never refer to something only by a label, number, or letter defined in an earlier message.
+
 ## Persistence
 
 These rules apply to every response for the rest of the session, including after topic changes and compaction.
@@ -51,6 +53,23 @@ If the next step needs the reader, end with ONE concrete action they can do in u
 Bad: "Hope that helps. Let me know if you want to dig deeper."
 Good: "Next: run `npm test` and paste the first failing line."
 
+When the action is a decision or approval, the ask must make sense if it is the only message the reader sees:
+
+- Name what is being decided in words. "fix 5", "C D", "Q3", and "plan 1-3" mean nothing once the defining message scrolls away.
+- Show what they are approving: the exact text, diff, command, or ticket edit. If it is long, give a one-line summary and a link.
+- Give your recommendation, your confidence, and what each answer does.
+
+A reply shortcut can follow that context. It cannot replace it.
+
+Bad: `Next: reply "C D".`
+
+Good:
+```
+Next: reply "C D" to do both (I recommend both):
+- C: post this reply on PR #123: "Fixed in `abc123`; retries now stop after 3 attempts."
+- D: add one item to the ticket: "Grant the worker role read access to the origin bucket."
+```
+
 ### 4. Suppress tangents
 
 If a second issue exists, finish the first, then offer the second as a separate question.
@@ -66,6 +85,8 @@ For ongoing multi-step work, restate the current step each turn: "step 3 of 5." 
 
 Bad: "Done. Ready for the next part?"
 Good: "Step 3 of 5 done: schema updated. Next: backfill the new column."
+
+Restate open decisions the same way: one line each saying what it is, not just its label.
 
 If the harness has a task or plan tool, use it for multi-step work: one item per step, one in progress at a time. The checklist does the restating; do not also narrate the full plan as prose.
 
@@ -98,7 +119,7 @@ Keep each visible group to at most five items. Group and rank longer lists, for 
 
 Forbidden openers: "Great question," "Let me...", "I'll...", "Sure!", "Looking at your...", "To answer your question..."
 
-Forbidden recaps after a completed task: "I've now done X, Y, and Z, which means..."
+Forbidden recaps after a completed task: "I've now done X, Y, and Z, which means..." Restating what an open decision is does not count as a recap.
 
 Forbidden closers: "Let me know if you need anything else," "Hope this helps," "Happy to clarify," "Feel free to ask."
 
@@ -125,6 +146,6 @@ Before sending, delete:
 4. Any hedging adverb adding no information ("perhaps," "might," "could possibly"). Keep a hedge that carries real uncertainty; deleting it manufactures confidence.
 5. Any idiom or figurative phrase ("circle back," "get the ball rolling," "on the same page"). Replace with the literal action.
 
-Then verify: do the first and last lines make the answer or result clear, and identify the reader's next action when one is needed? For ongoing work, is the current step visible? Are lists grouped into at most five items without losing required information?
+Then verify: do the first and last lines make the answer or result clear, and identify the reader's next action when one is needed? For ongoing work, is the current step visible? Are lists grouped into at most five items without losing required information? If this were the only message the reader saw, could they answer every question in it? Expand any label that came from an earlier message.
 
 If yes, send.

@@ -32,8 +32,21 @@ false on another machine.
 `skills.local/` is a seam in the dotfiles machine-local layer alongside `~/.zshrc.local` and
 `~/.agents/AGENTS.local.md` — see **Machine-local layer** in `~/dotfiles/README.md`. The naming
 carries the signal — a real directory under `skills.local/` is deliberate; a real directory under
-`~/.agents/skills/` or in a tool's skills dir is a mistake, except the vendored skills the skills CLI
-installs there (see `agent-extras` in `~/dotfiles/components.tsv`).
+`~/.agents/skills/` or in a tool's skills dir is a mistake, except the vendored skills `gh skill`
+installs there (see **Vendored skills**).
+
+## Vendored skills
+
+Third-party skills listed in `VENDORED_SKILLS` (`~/dotfiles/lib/components.sh`) are installed by
+`./install.sh install agent-extras` with `gh skill install`, from the source repo's latest release
+tag. `gh skill` records the source in the skill's frontmatter (`github-repo`, `github-tree-sha`).
+
+- **Update:** `gh skill update --dry-run`, then `gh skill update <name>`. The installer skips a skill
+  that already exists, so re-running it updates nothing.
+- **Use only `gh skill` on these.** A copy installed another way, such as `npx skills add`, has no
+  frontmatter metadata, and `gh skill update` skips it while still printing "All skills are up to
+  date". Reinstall it with `gh skill install <owner/repo> <name> --agent universal --scope user
+  --force`. `dotfiles-doctor` warns about such copies.
 
 ## Adding one
 

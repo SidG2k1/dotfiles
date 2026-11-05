@@ -2,7 +2,7 @@
 
 ## Project Structure & Sources of Truth
 
-This repository installs portable macOS configuration. Root files contain shell, Vim, Git, and Homebrew settings. Application config lives under `config/`; executable tools live in `bin/`; shared shell and Python helpers live in `lib/`; agent instructions and skills live in `agents/`; and the orcw fixture test lives in `tests/`.
+This repository installs portable macOS configuration. Root files contain shell, Vim, Git, and Homebrew settings. Application config lives under `config/`; executable tools live in `bin/`; shared shell and Python helpers live in `lib/`; agent instructions and skills live in `agents/`; and tests live in `tests/`.
 
 Treat `manifest.tsv` as the source of truth for installed paths and strategies, and `components.tsv` for component dependencies and packages. Update them when adding an installed file or component. `.gitignore` is a denylist, so check `git status` before committing and add a pattern for anything that must stay local. Keep machine-specific values, identities, credentials, and absolute `/Users/...` paths out of the repository.
 
@@ -12,8 +12,6 @@ Treat `manifest.tsv` as the source of truth for installed paths and strategies, 
 - `./install.sh` reapplies this laptop's saved components idempotently and backs up conflicting targets. A fresh selection contains only `core`.
 - `bin/dotfiles-doctor --strict` checks installed links, dependencies, skills, runtime probes, and accidental identity leakage.
 - `bash -n <script>` or `zsh -n <file>` checks shell syntax; run `shellcheck --severity=warning <script>` on changed Bash files.
-- `bash tests/orcw.sh` drives orcw against a fake Orca; run it after changing `lib/orcw.py`.
-
 ## Style and Naming
 
 Write portable shell: `install.sh` must remain compatible with macOS Bash 3.2. Use tabs where the surrounding shell code does, quote expansions, and preserve `set -euo pipefail` conventions. Python uses four-space indentation, snake_case names, and the standard library unless an existing dependency is clearly better. Name executable commands with lowercase hyphenated names, such as `dotfiles-doctor`.
@@ -22,6 +20,6 @@ Keep comments focused on constraints and reasons. Do not duplicate lists or defa
 
 ## Tests, Commits, and Pull Requests
 
-Only orcw has a fixture test; do not add tests or CI steps for config, installer, or script changes. Verify those with `./install.sh --dry-run`, `bin/dotfiles-doctor --strict`, and the syntax and lint checks above. CI only runs the privacy scans.
+Do not add tests or CI steps for config, installer, or script changes. Verify those with `./install.sh --dry-run`, `bin/dotfiles-doctor --strict`, and the syntax and lint checks above. CI only runs the privacy scans.
 
 Use short, imperative commit subjects consistent with history, optionally prefixed with a type such as `fix:`. Pull requests should explain the user-visible effect or non-obvious rationale, identify risks, and list verification performed. Link related issues when applicable; include screenshots only for visible configuration changes. Never include credentials, machine-local details, or AI-generation branding.

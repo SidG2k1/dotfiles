@@ -495,10 +495,15 @@ check_skills() {
   done
 
   if component_enabled agent-extras; then
-    local spec
+    local spec f
     for spec in $VENDORED_SKILLS; do
       s=${spec##*@}
-      [ -f "$HOME/.agents/skills/$s/SKILL.md" ] || row FAIL "skill $s" "missing; re-run install.sh install agent-extras"
+      f=$HOME/.agents/skills/$s/SKILL.md
+      if [ ! -f "$f" ]; then
+        row FAIL "skill $s" "missing; re-run install.sh install agent-extras"
+      elif ! grep -q '^ *github-repo:' "$f"; then
+        row WARN "skill $s" "no gh skill metadata; see Vendored skills in ~/.agents/SKILLS.md"
+      fi
     done
     if command -v gh >/dev/null 2>&1 && gh extension list 2>/dev/null | grep -q 'github/gh-stack'; then
       row PASS gh-stack "extension installed"

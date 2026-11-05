@@ -19,9 +19,6 @@ Homebrew's `shellenv` line goes in `~/.zprofile` or `~/.zshenv` **by hand** — 
 repo does not install `~/.zprofile`, because other tools' installers append to it
 and rewrite it on upgrade (`manifest.tsv` records why).
 
-Full Xcode, not just the Command Line Tools, is needed only for the AltTab build
-in step 5. Skip it otherwise.
-
 ## 2. Install
 
 ```sh
@@ -114,10 +111,12 @@ do code --install-extension "$extension"; done
 
 - **MCP servers and app integrations**: re-add by signing in.
 - **GUI permission grants**: Ghostty (and any other terminal) needs
-  Accessibility and Automation; AltTab needs Accessibility plus Screen Recording
-  (step 5). Mos does nothing until launched and granted Accessibility, then
-  reverse scrolling is switched on in its own preferences, vertical and
-  horizontal separately. Its settings live in a plist that `cfprefsd` owns and
+  Accessibility and Automation. BetterCmdTab needs Accessibility, plus Screen
+  Recording for its Previews layout (Settings → Appearance → Layout). Leave its
+  **Live window previews** off: it re-captures every window ten times a second,
+  and leaked captures silence all notifications (see Troubleshooting). Mos does
+  nothing until launched and granted Accessibility, then reverse scrolling is
+  switched on in its own preferences, vertical and horizontal separately. Its settings live in a plist that `cfprefsd` owns and
   rewrites, so no tracked file can set them.
 
 ### Baseten router
@@ -188,62 +187,7 @@ local env file you restore:
 chmod 600 ~/.env
 ```
 
-## 5. Pinned AltTab source build
-
-Optional, and the longest step. Pinned to v10.12.0 (`317a485b`), before AltTab's
-Pro subsystem and source-tree restructure — deliberately giving up later upstream
-work.
-
-```sh
-git clone https://github.com/lwouis/alt-tab-macos.git ~/src/alt-tab-macos
-cd ~/src/alt-tab-macos && git switch -c pre-pro 317a485bcb090bf2b29e3f78872218f0099e1d62
-```
-
-Apply the three Sparkle patches by hand (they stay uncommitted local edits; the
-script verifies them but does not write them):
-
-- `Info.plist` — `SUEnableAutomaticChecks` → `false`
-- `src/logic/Preferences.swift` — default `updatePolicy` → `.manual`
-- `src/logic/events/PreferencesEvents.swift` — force both
-  `automaticallyDownloadsUpdates` and `automaticallyChecksForUpdates` to `false`
-
-Then `bin/rebuild-alttab` owns the rest:
-
-| Command | Does |
-| --- | --- |
-| `rebuild-alttab check` | prerequisites + patch state, no build |
-| `rebuild-alttab build` | build, ad-hoc sign, install to `/Applications`, launch |
-| `rebuild-alttab reset-perms` | reset TCC state after a rebuild loses it |
-
-Override the checkout location with `ALTTAB_SRC`.
-
-Facts worth knowing before you debug something that is not broken:
-
-- **Full Xcode is required** and must be the selected developer directory; the
-  script refuses to build under the Command Line Tools and prints the three
-  `xcode-select` / `xcodebuild` commands to fix it.
-- **CocoaPods is not needed.** `Pods/` is committed at that commit. Build the
-  *workspace*, not the project — the project alone will not resolve the pods.
-- **Not notarized.** The build is ad-hoc signed, so `spctl -a` rejects it. This
-  is harmless: a locally built bundle carries no quarantine attribute, so
-  Gatekeeper does not gate its launch. Do not "fix" the spctl result.
-- **The version string is literally `#VERSION#`.** A local Debug build leaves
-  `CFBundleShortVersionString` unsubstituted; upstream CI fills it in at release
-  time. Nothing is wrong.
-- **The two TCC grants are GUI-only and cannot be scripted.** After a rebuild,
-  grant AltTab under **Privacy & Security → Screen & System Audio Recording** and
-  **→ Accessibility**. If approval still is not detected, remove and re-add
-  `/Applications/AltTab.app` in both lists.
-- **Sparkle has a fourth re-enable site, not three.**
-  `src/logic/events/UserDefaultsEvents.swift:25` sets
-  `automaticallyChecksForUpdates = true`. It is gated on
-  `automaticallyDownloadsUpdates` already being true, which the patch above
-  forces false, so it is unreachable in steady state — but it is precisely the
-  stale-user-default path the three patches are meant to close. `rebuild-alttab
-  check` reports it as expected rather than pretending three sites is the whole
-  story.
-
-## 6. Editors
+## 5. Editors
 
 **vim** loads the plugins listed in `vim/plugins.txt` as native packages from
 `~/.vim/pack/bundle/start/` (`:help packages`), with no plugin manager. Without
@@ -252,14 +196,14 @@ harder to diagnose than an error. `./install.sh install vim-plugins` clones them
 `dotfiles-doctor` reports any that are missing and warns on a leftover pre-native-packages
 `~/.vim/bundle`.
 
-## 7. Optional Ghostty appearance
+## 6. Optional Ghostty appearance
 
 The optional Ghostty appearance preset is installed as
 `~/.config/ghostty/appearance.ghostty` and is not loaded automatically. To use it
 on another machine, copy its settings above the managed block in Ghostty's
 `config`; local display adjustments stay outside that block.
 
-## 8. Mermaid validation
+## 7. Mermaid validation
 
 `mermaid-check FILE.md` renders each Mermaid block in temporary storage and
 leaves the Markdown unchanged. It requires `uv` and the pinned npm dependency
@@ -274,16 +218,17 @@ The dependency version is owned by `config/mermaid/package.json`. Rendering
 checks syntax and tool compatibility, not whether a diagram accurately explains
 its sources. The npm install may download a headless browser.
 
-## 9. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | `ls` or `cat` fails in every shell | they are aliased to `eza`/`bat`; the alias needs the tool | `./install.sh install shell`. The aliases are defined only when the binary exists, so a stale `~/.zshrc` predating that guard is the other possibility — re-run `./install.sh` |
 | A command using `eza` hangs forever, with no output | eza ≥0.23 reads **stdin** for paths when stdout is not a TTY and never returns if given no path argument. Agent, CI, and `$(…)` shells hit this | the guard lives in `~/.zshenv`, which every zsh reads — `.zshrc` is interactive-only and cannot fix it. Verify `~/.zshenv` is installed |
 | `eza --icons .` → `invalid value '.' for '--icons [<WHEN>]'` | `--icons` takes an *optional* value in eza ≥0.23, so it swallows the next argument | spell the value — `--icons=auto`, which also correctly drops icons when piped — or terminate flags with `-- .`. The tracked `ls`/`la`/`ll`/`lt` aliases and the `~/.zshenv` guard use these respectively; a bare `--icons` anywhere is the bug |
-| vim opens fine but `;th`, `:Tabularize`, ALE, and airline do nothing | the plugins are not in `~/.vim/pack/bundle/start/` — not cloned, or still in the old pathogen `~/.vim/bundle` location, which native-package vim never reads | see step 6 |
+| vim opens fine but `;th`, `:Tabularize`, ALE, and airline do nothing | the plugins are not in `~/.vim/pack/bundle/start/` — not cloned, or still in the old pathogen `~/.vim/bundle` location, which native-package vim never reads | see step 5 |
 | Every `git diff` / `git show` / `git add -p` errors | `core.pager = delta` and `delta` is not installed | `brew install git-delta` |
 | Every commit fails with a signing error | your `~/.gitconfig.local` sets `commit.gpgsign = true` but the signer or key is unavailable on this machine | fix the signer path and key in `~/.gitconfig.local`, or unset `commit.gpgsign` there |
 | Claude Code status line shows the directory but no model, context, or rate limits | `~/.claude/statusline.sh` reads its JSON stdin with `jq`, so without `jq` only the git-derived parts render | `./install.sh install claude` |
 | Glyphs render as tofu boxes | no Nerd Font | `./install.sh install fonts`; then select it in the terminal |
 | Ghostty logs "unknown key" on start | that key is not in your Ghostty version | remove it from the `# >>> dotfiles` block; only append keys the installed version accepts |
+| No notification banners or sounds from any app, with no Focus on | a window switcher or screen recorder left capture streams open, so macOS treats the display as shared and silences notifications; `/usr/bin/log show --last 10m --predicate 'eventMessage CONTAINS "Set auxiliary state"'` ends in `isScreenShared=1` | `killall replayd` clears the leaked streams; if it recurs, quit the app that leaks them |

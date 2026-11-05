@@ -1,0 +1,21 @@
+{
+  "model": "baseten/decision-models/baseten-mammoth-27b-latest",
+  "timeoutMs": 30000,
+  "enforcementMode": "enforce",
+  "policyRules": [
+    {
+      "id": "human-credential-read",
+      "when": { "credentialRead": true },
+      "source": "global",
+      "effect": "manual",
+      "reason": "Shell command reads credentials"
+    },
+    {
+      "id": "human-privilege",
+      "when": { "privilegeEscalation": true },
+      "source": "global",
+      "effect": "manual",
+      "reason": "Privilege escalation"
+    }
+  ]
+}

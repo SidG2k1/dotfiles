@@ -58,7 +58,10 @@ When it does not add substantive meaning, remove rather than paraphrase:
 - redundant orientation such as "in one sentence," "put differently," "in other words," or repeated summaries;
 - aphoristic endings such as "that distinction matters," "that is the boundary," "that is the actual constraint," or similar closing fragments;
 - validation or candor framing such as "you're absolutely right," "fair hit," "one honest caveat," or "the honest answer," unless the interpersonal meaning itself matters;
-- rhetorical restatements that merely repeat an already stated claim using different vocabulary.
+- rhetorical restatements that merely repeat an already stated claim using different vocabulary;
+- rejection of an option or objection nobody raised, such as "a tempting approach would be…", unless a reader would actually weigh it;
+- items grouped in threes for rhythm when the meaning does not have three parts;
+- an "-ing" phrase attached to a plain fact to make it sound deeper, such as "…, ensuring X" or "…, highlighting Y", unless it states a real claim.
 
 Do not replace these with simpler filler. Omit them entirely when they carry no additional meaning.
 
@@ -138,5 +141,7 @@ Do not merely replace a few Agentish words while retaining the original structur
 The output should read as though a person simply stated what the input means. It is acceptable, and often preferable, for the output to be substantially shorter than the input.
 
 Preserve names, quotations, commands, code, and technical terminology whose wording must remain fixed.
+
+Before returning the rewrite, compare it with the input. Check that it neither adds nor drops a fact, name, number, date, quote, condition, or degree of certainty, and fix any difference.
 
 When invoked on a passage, output only the rewritten text.

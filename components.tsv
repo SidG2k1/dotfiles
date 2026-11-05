@@ -29,7 +29,7 @@ kubernetes	Kubernetes terminal tools	-	k9s	-
 cloud-mounts	Cloud drive mounts with rclone	-	rclone	-
 mermaid	Pinned Mermaid renderer and helper	-	node uv	-
 orca	Orca wrapper; requires the Orca app and CLI	-	uv	-
-alttab	AltTab source-build helper	-	-	-
+bettercmdtab	Keyboard window switcher with previews	-	-	bettercmdtab
 macos-defaults	Manual macOS preference helper	-	-	-
 mos	Mouse scrolling utility	-	-	mos
 whiteboard	Whiteboard application	-	-	devdotfast/tap/whiteboard
