@@ -14,12 +14,13 @@ $line_break\
 $character"""
 
 [character]
-success_symbol = "[❯](bold cyan)"
+success_symbol = "[❯](bold #286983)"
+error_symbol = "[❯](bold #a34d65)"
 
 [directory]
 # 0 = no left-truncation, so the full path is shown from ~ down.
 truncation_length = 0
-style             = "blue"
+style             = "#286983"
 
 [custom.kubernetes]
 # Starship's native module leaves an unset namespace blank even though Kubernetes uses "default".
@@ -31,16 +32,19 @@ printf '%s' "$value"
 '''
 when   = 'command -v kubectl >/dev/null 2>&1'
 symbol = "☸ "
-style  = "cyan"
+style  = "#575279"
 format = '[$symbol$output]($style) '
 
 [git_branch]
-style  = "yellow"
+style  = "#6f5a89"
 format = '[\($branch\)]($style) '
 
 [git_status]
-style = "yellow"
+style = "#6f5a89"
+
+[git_state]
+style = "bold #6f5a89"
 
 [cmd_duration]
-style    = "yellow"
+style    = "#575279"
 format   = '[⏱ $duration]($style) '

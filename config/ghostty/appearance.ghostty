@@ -1,6 +1,7 @@
 # Optional appearance preset; local display overrides may differ.
-theme = TokyoNight Storm
-background-opacity = 0.3
+# The theme lives in config.ghostty so every machine matches; this file holds
+# only window appearance.
+background-opacity = 0.8
 background-opacity-cells = true
 background-blur = macos-glass-regular
 font-size = 14

@@ -1,7 +1,10 @@
-# Functional settings only. install.sh appends this file as a marker-delimited
-# block to ~/.config/ghostty/config, and Ghostty is last-wins, so any key set
-# here overrides the same key a machine set above the block. Per-machine
-# appearance belongs above the markers or in a display-specific override.
+# Functional settings and the shared theme. install.sh appends this file as a
+# marker-delimited block to ~/.config/ghostty/config, and Ghostty is last-wins,
+# so any key set here overrides the same key a machine set above the block.
+# Anything a machine should be able to vary has to stay out of this file.
+
+# One theme everywhere, so terminals match across machines.
+theme = Rose Pine Dawn
 
 # Nerd Font glyphs for the starship prompt.
 font-family = "JetBrainsMono Nerd Font"
