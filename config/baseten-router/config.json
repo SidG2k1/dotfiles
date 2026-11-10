@@ -1,0 +1,31 @@
+{
+  "model_name": "baseten-router",
+  "cooldown_seconds": 60,
+  "default_reasoning_effort": "max",
+  "deployments": [
+    {
+      "id": "baseten-deepseek-v4.1-flash-1017-fast",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-1017-Fast",
+      "order": 1,
+      "input_cost_per_token": 0.0000006,
+      "output_cost_per_token": 0.0000024,
+      "cache_read_input_token_cost": 0.000000014
+    },
+    {
+      "id": "baseten-deepseek-v4.1-flash-fast",
+      "model": "deepseek-ai/DeepSeek-V4.1-Flash-Fast",
+      "order": 2,
+      "input_cost_per_token": 0.0000003,
+      "output_cost_per_token": 0.0000012,
+      "cache_read_input_token_cost": 0.000000007
+    },
+    {
+      "id": "baseten-glm-5.3",
+      "model": "zai-org/GLM-5.3",
+      "order": 3,
+      "input_cost_per_token": 0.0000014,
+      "output_cost_per_token": 0.0000044,
+      "cache_read_input_token_cost": 0.00000014
+    }
+  ]
+}

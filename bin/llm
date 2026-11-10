@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""Send prompts to the local Baseten router."""
+
+from __future__ import annotations
+
+import argparse
+import http.client
+import json
+import signal
+import sys
+import urllib.error
+import urllib.request
+
+ROUTER_URL = "http://127.0.0.1:4000/v1/chat/completions"
+MODEL = "baseten-router"
+AUTH_TOKEN = "local-proxy"
+TIMEOUT_SECONDS = 15 * 60
+
+
+class ResponseError(Exception):
+    pass
+
+
+def parse_args(argv):
+    parser = argparse.ArgumentParser(
+        prog="llm",
+        description="Send a prompt through the local Baseten router.",
+        epilog="Piped stdin is appended to the positional prompt.",
+    )
+    parser.add_argument("--system", help="system message for the request")
+    parser.add_argument("-m", "--model", default=MODEL, help="model name")
+    parser.add_argument(
+        "--no-stream",
+        action="store_false",
+        dest="stream",
+        help="wait for the complete response instead of streaming",
+    )
+    parser.add_argument("prompt", nargs="*")
+    return parser.parse_args(argv)
+
+
+def prompt_text(args, stdin):
+    prompt = " ".join(args.prompt).strip()
+    piped = "" if stdin.isatty() else stdin.read().rstrip("\n")
+    if prompt and piped.strip():
+        return f"{prompt}\n\n{piped}"
+    if prompt:
+        return prompt
+    return piped if piped.strip() else ""
+
+
+def request_body(prompt, system, stream):
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+    return {"model": MODEL, "messages": messages, "stream": stream}
+
+
+def request_headers(stream):
+    return {
+        "Authorization": f"Bearer {AUTH_TOKEN}",
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream" if stream else "application/json",
+    }
+
+
+def main(argv=None, *, stdin=None, stdout=None, stderr=None, url=ROUTER_URL):
+    args = parse_args(argv)
+    stdin = stdin or sys.stdin
+    stdout = stdout or sys.stdout
+    stderr = stderr or sys.stderr
+
+    if args.model != MODEL:
+        print(
+            f"llm: only the local {MODEL!r} model is available",
+            file=stderr,
+        )
+        return 2
+    if args.prompt == ["logs"]:
+        print("llm: history is not recorded", file=stderr)
+        return 2
+
+    prompt = prompt_text(args, stdin)
+    if not prompt:
+        print("llm: a prompt or piped input is required", file=stderr)
+        return 2
+
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(request_body(prompt, args.system, args.stream)).encode(),
+        headers=request_headers(args.stream),
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
+            if args.stream:
+                return print_stream(response, stdout)
+            return print_complete(response, stdout)
+    except urllib.error.HTTPError as exc:
+        print(f"llm: {upstream_error(exc)}", file=stderr)
+        return 1
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, ConnectionRefusedError):
+            print(
+                "llm: cannot connect to baseten-router; start it with "
+                "`baseten-router`",
+                file=stderr,
+            )
+        else:
+            print(f"llm: request failed: {exc.reason}", file=stderr)
+        return 1
+    except (TimeoutError, ConnectionError, http.client.HTTPException) as exc:
+        print(f"llm: request failed: {exc}", file=stderr)
+        return 1
+    except ResponseError as exc:
+        print(f"llm: {exc}", file=stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+
+
+def print_complete(response, stdout):
+    try:
+        payload = json.load(response)
+        content = payload["choices"][0]["message"].get("content") or ""
+    except (
+        json.JSONDecodeError,
+        UnicodeDecodeError,
+        KeyError,
+        IndexError,
+        TypeError,
+    ) as exc:
+        raise ResponseError(f"invalid response from baseten-router: {exc}") from exc
+    write_answer(stdout, content)
+    return 0
+
+
+def print_stream(response, stdout):
+    wrote = False
+    last = ""
+    for raw_line in response:
+        line = raw_line.decode("utf-8", "replace").strip()
+        if not line.startswith("data:"):
+            continue
+        data = line[5:].strip()
+        if data == "[DONE]":
+            break
+        try:
+            payload = json.loads(data)
+        except json.JSONDecodeError as exc:
+            raise ResponseError(f"invalid stream event from baseten-router: {exc}") from exc
+        if isinstance(payload, dict) and "error" in payload:
+            raise ResponseError(error_message(payload))
+        for choice in payload.get("choices") or []:
+            delta = choice.get("delta") or {}
+            content = delta.get("content")
+            if isinstance(content, str) and content:
+                stdout.write(content)
+                stdout.flush()
+                wrote = True
+                last = content[-1]
+    if wrote and last != "\n":
+        stdout.write("\n")
+    return 0
+
+
+def write_answer(stdout, content):
+    stdout.write(content)
+    if content and not content.endswith("\n"):
+        stdout.write("\n")
+    stdout.flush()
+
+
+def upstream_error(exc):
+    try:
+        body = exc.read()
+    except OSError:
+        return f"HTTP {exc.code}"
+    finally:
+        exc.close()
+    try:
+        return error_message(json.loads(body))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        text = body.decode("utf-8", "replace").strip()
+        return text or f"HTTP {exc.code}"
+
+
+def error_message(payload):
+    error = payload.get("error", payload) if isinstance(payload, dict) else payload
+    if isinstance(error, dict) and isinstance(error.get("message"), str):
+        return error["message"]
+    if isinstance(error, str):
+        return error
+    return "request failed"
+
+
+if __name__ == "__main__":
+    if hasattr(signal, "SIGPIPE"):
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    raise SystemExit(main())

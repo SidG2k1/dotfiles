@@ -101,6 +101,9 @@ agents/skills/dispatching-parallel-agents	~/.agents/skills/dispatching-parallel-
 agents/skills/receiving-code-review	~/.agents/skills/receiving-code-review	link	Forked from superpowers 6.2.0: verify review feedback technically before implementing it.
 agents/skills/i-have-adhd	~/.agents/skills/i-have-adhd	link	Adapted from ayghri/i-have-adhd 0.2.0 (MIT): opt-in /i-have-adhd output shaping for long multi-step sessions. disable-model-invocation and agents/openai.yaml keep it explicit-only in both tools; the upstream always-on hook is deliberately not installed.
 
+# ---- here-now ----
+agents/skills/here-now	~/.agents/skills/here-now	link	Vendored snapshot of heredotnow/skill 1.32.0, including the publish and Drive helpers. Its own component so a laptop with a different here-now skill can leave it out. Credentials and publish state stay machine-local; update this snapshot in the repo rather than through the skills CLI.
+
 # ---- claude ----
 agents/AGENTS.md	~/.claude/CLAUDE.md	link	Second symlink to the same file so Claude Code reads one source of truth. Point it at ~/.agents/AGENTS.md, not at $DOTFILES, so the repo can move.
 agents/SKILLS.md	~/.claude/skills/README.md	link	Relative symlink ../../.agents/SKILLS.md; the doc sits in the skills dir it describes.
@@ -142,15 +145,16 @@ config/mermaid/package.json	~/.local/share/dotfiles/mermaid/package.json	link	Pi
 bin/macos-defaults	~/bin/macos-defaults	link	zshrc puts ~/bin at the front of PATH. Run by hand; installing it changes no setting, and the defaults it writes need a logout to apply.
 
 # ---- router ----
-bin/baseten-router	~/.local/bin/baseten-router	link	Optional local proxy; --setup installs its runtime. Provider credentials stay in the environment or private local config.
-config/litellm/baseten.yaml	~/.config/litellm/baseten.yaml	link	Model routing and prices; the provider API key is an environment reference.
-config/litellm/baseten_metrics.py	~/.config/litellm/baseten_metrics.py	link	Request metrics callback loaded alongside the router config.
-
-# ---- router-claude ----
-config/litellm/claude.json	~/.config/litellm/claude.json	link	Optional Claude Code profile, selected with --settings; leaves the app-owned settings file alone.
+bin/baseten-router	~/.local/bin/baseten-router	link	Optional local Baseten proxy; --setup resolves its runtime. Provider credentials stay in the environment or private local config.
+config/baseten-router/config.json	~/.config/baseten-router/config.json	link	Baseten deployments, priorities, and prices; the provider API key is an environment reference.
+lib/baseten-router/router.py	~/.config/baseten-router/router.py	link	HTTP proxy, ordered failover, streaming, and local request validation.
+lib/baseten-router/metrics.py	~/.config/baseten-router/metrics.py	link	Live traffic view imported by the router.
 
 # ---- router-opencode ----
-config/opencode/preferences.json	~/.config/opencode/opencode.json	merge-json	Register the local proxy provider; preserve the default model and unrelated providers and settings.
+config/opencode/preferences.json	~/.config/opencode/opencode.json	merge-json	Register the local Baseten provider and select it for the build agent; preserve the plan agent and unrelated settings.
+
+# ---- llm ----
+bin/llm	~/.local/bin/llm	link	Small router-only prompt client using the Python standard library; it stores no history or configuration.
 
 # ---- never ----
 zprofile	~/.zprofile	never	On a real machine this target is owned by other tools' installers - Homebrew shellenv, container and VM shell hooks, toolchain env snippets - which append to it and rewrite it on upgrade. Overwriting silently removes working integrations. Add the brew shellenv line by hand, or keep it in ~/.zshenv.

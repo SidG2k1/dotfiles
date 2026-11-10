@@ -17,6 +17,9 @@ dense-analysis/ale
 # Statusline. Backs the g:airline_section_z line/percent readout.
 vim-airline/vim-airline
 
+# Rosé Pine Dawn colors, matching Ghostty.
+rose-pine/vim
+
 # Thesaurus lookup. Backs the ;th mapping
 # (:ThesaurusQueryReplaceCurrentWord) used while writing prose and LaTeX.
 ron89/thesaurus_query.vim

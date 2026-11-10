@@ -121,53 +121,78 @@ do code --install-extension "$extension"; done
 
 ### Baseten router
 
-The router and each client integration are independent choices. Install the
-router without changing any harness settings:
+The router is a local OpenAI-compatible proxy for the deployments in
+[the router config](config/baseten-router/config.json). It supports OpenCode
+and other clients using the Chat Completions API. The router and its OpenCode
+configuration are independent choices:
 
 ```sh
 ./install.sh install router
 ~/.local/bin/baseten-router --setup
 ```
 
-`--setup` installs the proxy runtime with known compromised releases excluded,
-without starting it. Authentication and client sessions are separate from
-installation.
+`--setup` resolves the Python runtime and exits without starting the router or
+loading credentials.
 
 If you use 1Password, install its CLI, sign in, and create
-`~/.config/litellm/env` with your item's name or ID:
+`~/.config/baseten-router/env` with your item's name or ID:
 
 ```sh
 BASETEN_OP_ITEM="Baseten"
 ```
 
 The item must hold the provider API key in its password field. Keep this file
-local and run `chmod 600 ~/.config/litellm/env`. An exported `BASETEN_API_KEY`
-takes precedence and works without 1Password. No credentials need to be copied
-from the other laptop.
+local and run `chmod 600 ~/.config/baseten-router/env`. An exported
+`BASETEN_API_KEY` takes precedence and works without 1Password.
 
-Start the proxy in one terminal:
+Start the router in one terminal:
 
 ```sh
 ~/.local/bin/baseten-router
 ```
 
-Choose either client integration independently; the client applications must
-already be installed. In another terminal, install and use the Claude profile:
-
-```sh
-./install.sh install router-claude
-claude --settings "$HOME/.config/litellm/claude.json"
-```
-
-For OpenCode, register the provider and select it for a session:
+For OpenCode, register the provider and use the build-agent model:
 
 ```sh
 ./install.sh install router-opencode
-opencode --model litellm/baseten-router
+opencode --model baseten-router/chat
 ```
 
-Neither integration changes the client's default model. Both profiles use port
-4000. Model routing and pricing live in [the router config](config/litellm/baseten.yaml).
+The OpenCode component selects `baseten-router/chat` for the build agent. The
+plan agent continues to call Baseten's Kimi model directly. Existing sessions
+that selected the old model must choose the new one again.
+
+Local clients send Chat Completions requests to
+`http://127.0.0.1:4000/v1` with model `baseten-router` and any non-empty bearer
+token.
+
+For an existing LiteLLM installation, stop the old router, move the credential
+file with `mv ~/.config/litellm/env ~/.config/baseten-router/env`, and keep its
+mode at `600`. Review `./install.sh list`, then replace the saved selection
+without `router-claude`. After installing the new router and OpenCode
+components, remove old `~/.config/litellm` symlinks only after confirming they
+point into this checkout. OpenCode's recursive configuration merge cannot delete
+the old `providers.litellm` entry, so remove that entry from the machine-local
+configuration by hand. After verification, `uv tool uninstall litellm` removes
+the old runtime.
+
+### llm CLI
+
+The optional `llm` command sends prompts through the router. It stores no
+history or configuration and reads piped stdin as part of the prompt:
+
+```sh
+./install.sh install llm
+llm --system "Be concise" "Explain this error"
+git diff | llm --system "Review this diff" "Summarize the changes"
+llm --no-stream "Reply with OK"
+```
+
+The router applies its configured reasoning default. The CLI accepts only model
+`baseten-router`; `-m baseten` and the old `llm logs` command are not supported.
+It replaces Datasette's `llm` tool. After installing it, remove the older tool
+and its local state with `uv tool uninstall llm` and by deleting
+`~/Library/Application Support/io.datasette.llm`.
 
 ## 4. What must never enter this repo
 

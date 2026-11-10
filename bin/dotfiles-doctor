@@ -467,11 +467,17 @@ check_dependencies() {
 check_skills() {
   section "selected harness skill links"
 
-  local d s a b ra tool bad
-  # Tracked skills that never reached ~/.agents (install.sh links them there).
+  local d s g a b ra tool bad
+  # Tracked skills that never reached ~/.agents (install.sh links them there),
+  # except skills in an optional component this laptop did not select.
   for d in "$DOTFILES/agents/skills"/*/; do
     [ -d "$d" ] || continue
     s=$(basename "$d")
+    g=$(awk -F'\t' -v src="agents/skills/$s" '
+      /^# ---- .* ----/ { g = $0; sub(/^# ---- /, "", g); sub(/ ----.*/, "", g); next }
+      $1 == src { print g; exit }
+    ' "$MANIFEST")
+    [ -z "$g" ] || component_enabled "$g" || continue
     [ -e "$HOME/.agents/skills/$s/SKILL.md" ] || row WARN "skill $s" "not installed in ~/.agents/skills"
   done
 

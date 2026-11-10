@@ -4,19 +4,25 @@ set -eu
 fail() { printf 'baseten-router: %s\n' "$*" >&2; exit 1; }
 
 [ "$#" -le 1 ] || fail "usage: baseten-router [--setup|--help]"
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/baseten-router"
+ROUTER="$CONFIG_DIR/router.py"
+
 case "${1:-}" in
   --setup)
     command -v uv >/dev/null 2>&1 || fail "uv is required; install it first."
-    exec uv tool install --python 3.12 --with 'rich==13.9.4' 'litellm[proxy]!=1.82.7,!=1.82.8,!=1.107.0'
+    [ -r "$ROUTER" ] || fail "Router code is missing. Run install.sh install router from your dotfiles checkout."
+    exec uv run --python 3.12 --script "$ROUTER" --setup
     ;;
   -h|--help)
     cat <<'EOF'
 Usage: baseten-router [--setup|--help]
 
---setup installs LiteLLM with known compromised releases excluded.
-Set BASETEN_API_KEY, or set BASETEN_OP_ITEM in ~/.config/litellm/env
-to read the password field of a 1Password item. XDG_CONFIG_HOME is respected.
-BASETEN_ROUTER_PORT overrides port 4000; BASETEN_ROUTER_LOG sets the log level.
+--setup resolves the router's Python runtime, then exits without starting it.
+Set BASETEN_API_KEY, or set BASETEN_OP_ITEM in
+~/.config/baseten-router/env to read the password field of a 1Password item.
+XDG_CONFIG_HOME is respected. BASETEN_ROUTER_PORT overrides port 4000;
+BASETEN_ROUTER_LOG sets the log level.
 EOF
     exit 0
     ;;
@@ -24,12 +30,10 @@ EOF
   *) fail "usage: baseten-router [--setup|--help]" ;;
 esac
 
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/litellm"
-CONFIG="$CONFIG_DIR/baseten.yaml"
+CONFIG="$CONFIG_DIR/config.json"
 PORT="${BASETEN_ROUTER_PORT:-4000}"
 
-# litellm silently rebinds to a random port when 4000 is taken, which leaves
-# clients pointed at the :4000 config still talking to a stale process.
+# A stale listener would leave clients talking to the wrong process.
 if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "baseten-router: port $PORT is already in use:" >&2
   lsof -iTCP:"$PORT" -sTCP:LISTEN -t 2>/dev/null | while read -r pid; do
@@ -39,10 +43,8 @@ if lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
 fi
 
 command -v uv >/dev/null 2>&1 || fail "uv is required; install it first."
-LITELLM_HOME="$(uv tool dir)/litellm"
-[ -x "$LITELLM_HOME/bin/litellm" ] && [ -x "$LITELLM_HOME/bin/python" ] ||
-  fail "LiteLLM is missing. Run: baseten-router --setup"
-[ -r "$CONFIG" ] || fail "Config is missing. Run install.sh --only router from your dotfiles checkout."
+[ -r "$ROUTER" ] || fail "Router code is missing. Run install.sh install router from your dotfiles checkout."
+[ -r "$CONFIG" ] || fail "Config is missing. Run install.sh install router from your dotfiles checkout."
 
 if [ -z "${BASETEN_API_KEY:-}" ]; then
   if [ -r "$CONFIG_DIR/env" ]; then
@@ -58,23 +60,7 @@ fi
   fail "Set BASETEN_API_KEY or configure BASETEN_OP_ITEM in $CONFIG_DIR/env."
 
 export BASETEN_API_KEY
-export LITELLM_LOG="${BASETEN_ROUTER_LOG:-INFO}"
-export LITELLM_DONT_SHOW_FEEDBACK_BOX=true
+export BASETEN_ROUTER_PORT="$PORT"
+export BASETEN_ROUTER_LOG="${BASETEN_ROUTER_LOG:-INFO}"
 
-# The proxy reports only the model group alias, identical for every deployment,
-# so name the deployments here.
-"$LITELLM_HOME/bin/python" - "$CONFIG" "$PORT" <<'PY'
-import sys, yaml
-
-config, port = sys.argv[1], sys.argv[2]
-models = yaml.safe_load(open(config))["model_list"]
-print(f"baseten-router on 127.0.0.1:{port}")
-for m in models:
-    info, params = m.get("model_info") or {}, m["litellm_params"]
-    print(f"  order {params.get('order', '-'):<2} {info.get('id', '?'):<34} {params['model']}")
-PY
-
-exec "$LITELLM_HOME/bin/litellm" \
-  --config "$CONFIG" \
-  --host 127.0.0.1 \
-  --port "$PORT"
+exec uv run --python 3.12 --script "$ROUTER"

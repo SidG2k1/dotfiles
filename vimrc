@@ -40,6 +40,8 @@ set clipboard^=unnamed,unnamedplus
 let g:netrw_banner = 0
 let g:netrw_liststyle = 3
 set termguicolors
+set background=light
+silent! colorscheme rosepine_dawn
 set scrolloff=5 sidescrolloff=8
 set updatetime=300
 set splitright splitbelow

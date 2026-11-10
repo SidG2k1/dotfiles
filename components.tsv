@@ -19,6 +19,7 @@ claude	Claude Code preferences, instructions, and skill links	skills	jq	-
 codex	Codex preferences, instructions, and skill links	skills	uv	-
 opencode	OpenCode UI preferences and instructions	agent-shared	jq	-
 agent-extras	Third-party skills and gh-stack extension	skills	gh node	-
+here-now	Public here.now publishing skill	skills	-	-
 gh	GitHub CLI and preferences	-	gh	-
 vscode	VS Code application and preferences	-	jq	visual-studio-code
 docker	Preferences for an existing Docker installation	-	jq	-
@@ -35,6 +36,6 @@ mos	Mouse scrolling utility	-	-	mos
 whiteboard	Whiteboard application	-	-	devdotfast/tap/whiteboard
 crisp	Display configuration utility	-	-	crisp
 router	Baseten router and traffic view	-	uv	-
-router-claude	Optional Claude Code router profile	-	-	-
-router-opencode	OpenCode router provider; preserves default model	-	jq	-
+router-opencode	OpenCode router provider and build-agent model	-	jq	-
+llm	Router-only prompt CLI	-	-	-
 private	This laptop's private manifest	-	jq uv	-
